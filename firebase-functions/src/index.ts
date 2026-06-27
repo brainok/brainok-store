@@ -36,6 +36,7 @@ type InviteBenefit = "beta_access";
 type AccountRole = "admin" | "user";
 type AppRole = "owner" | "admin" | "user";
 type AppVisibility = "public" | "private";
+type AppType = "application" | "web_app";
 type AppPricingMode = "invite_only" | "free" | "paid" | "donation";
 type AppBillingInterval = "one_time" | "monthly" | "yearly" | "pay_what_you_want";
 type ActivationStatus = "not_found" | "trial" | "active" | "expired" | "revoked";
@@ -983,6 +984,8 @@ function appSettingsFromRequest(
     videoUrl?: string | null;
     latestVersion?: string | null;
     visibility?: AppVisibility;
+    appType?: AppType;
+    sortOrder?: number;
     shortDescription?: string;
     description?: string;
     supportContent?: string;
@@ -1010,6 +1013,12 @@ function appSettingsFromRequest(
       ["public", "private"],
       defaults.visibility || "public"
     ),
+    appType: oneOf<AppType>(
+      data.appType,
+      ["application", "web_app"],
+      defaults.appType || "application"
+    ),
+    sortOrder: Math.max(0, Math.round(asNumber(data.sortOrder) ?? defaults.sortOrder ?? 0)),
     pricing: {
       mode: pricingMode,
       priceCents: pricingMode === "free" || pricingMode === "invite_only"
@@ -1167,6 +1176,12 @@ export const updateApp = onCall({ region }, async (request) => {
         ["public", "private"],
         "public"
       ),
+      appType: oneOf<AppType>(
+        app.appType,
+        ["application", "web_app"],
+        "application"
+      ),
+      sortOrder: asNumber(app.sortOrder) ?? 0,
       description: asString(app.description) || "",
       shortDescription: asString(app.shortDescription) || "",
       supportContent: asString(app.supportContent) || "",

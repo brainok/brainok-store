@@ -94,6 +94,7 @@ export interface AppAccess {
 }
 
 export type AppVisibility = "public" | "private";
+export type AppType = "application" | "web_app";
 export type AppPricingMode = "invite_only" | "free" | "paid" | "donation";
 export type AppBillingInterval = "one_time" | "monthly" | "yearly" | "pay_what_you_want";
 
@@ -136,6 +137,8 @@ export interface BrainokApp {
   ownerUid: string;
   status: "active" | "archived";
   visibility?: AppVisibility;
+  appType?: AppType;
+  sortOrder?: number;
   shortDescription?: string;
   description?: string;
   supportContent?: string;
@@ -152,6 +155,8 @@ export interface UpdateAppInput {
   supportContent?: string;
   category?: string;
   visibility?: AppVisibility;
+  appType?: AppType;
+  sortOrder?: number;
   pricingMode?: AppPricingMode;
   priceCents?: number;
   currency?: string;

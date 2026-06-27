@@ -37,6 +37,7 @@ export type AccountRole = "admin" | "user";
 export type AccessStatus = "pending" | "active" | "revoked";
 export type AppRole = "owner" | "admin" | "user";
 export type AppVisibility = "public" | "private";
+export type AppType = "application" | "web_app";
 export type AppPricingMode = "invite_only" | "free" | "paid" | "donation";
 export type AppBillingInterval = "one_time" | "monthly" | "yearly" | "pay_what_you_want";
 
@@ -113,6 +114,8 @@ export interface BrainokApp {
   ownerUid: string;
   status: "active" | "archived";
   visibility?: AppVisibility;
+  appType?: AppType;
+  sortOrder?: number;
   description?: string;
   category?: string;
   pricing?: {

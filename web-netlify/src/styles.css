@@ -1497,7 +1497,7 @@ textarea {
 
 .inline-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, 180px) auto;
   gap: 10px;
   margin-bottom: 14px;
 }
@@ -1710,6 +1710,12 @@ textarea {
 .app-selector-header strong {
   color: #174ea6;
   font-size: 14px;
+}
+
+.app-order-actions {
+  display: inline-flex;
+  gap: 8px;
+  margin: 0 0 12px;
 }
 
 .app-selector-rail {

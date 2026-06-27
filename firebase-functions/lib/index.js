@@ -737,6 +737,8 @@ function appSettingsFromRequest(data, defaults = {}) {
         supportContent: textField(data.supportContent, defaults.supportContent ?? "", 10000),
         category: asString(data.category) ?? defaults.category ?? "",
         visibility: oneOf(data.visibility, ["public", "private"], defaults.visibility || "public"),
+        appType: oneOf(data.appType, ["application", "web_app"], defaults.appType || "application"),
+        sortOrder: Math.max(0, Math.round(asNumber(data.sortOrder) ?? defaults.sortOrder ?? 0)),
         pricing: {
             mode: pricingMode,
             priceCents: pricingMode === "free" || pricingMode === "invite_only"
@@ -861,6 +863,8 @@ export const updateApp = onCall({ region }, async (request) => {
             videoUrl: asString(existingMedia.videoUrl) || null,
             latestVersion: asString(existingDownloads.latestVersion) || null,
             visibility: oneOf(app.visibility, ["public", "private"], "public"),
+            appType: oneOf(app.appType, ["application", "web_app"], "application"),
+            sortOrder: asNumber(app.sortOrder) ?? 0,
             description: asString(app.description) || "",
             shortDescription: asString(app.shortDescription) || "",
             supportContent: asString(app.supportContent) || "",

@@ -10,11 +10,14 @@ import {
 } from "firebase/auth";
 import {
   ArrowLeft,
+  ArrowDown,
+  ArrowUp,
   BookOpen,
   ChevronDown,
   Copy,
   Download,
   ExternalLink,
+  Globe2,
   Image as ImageIcon,
   KeyRound,
   LogOut,
@@ -34,6 +37,7 @@ import { auth } from "./firebase";
 import {
   BrainokApp,
   ADMIN_EMAIL,
+  AppType,
   AppQuestion,
   DEFAULT_SITE_SETTINGS,
   SiteSettings,
@@ -60,7 +64,7 @@ import {
   watchSiteSettings
 } from "./account";
 
-type Tab = "apps" | "pricing" | "download" | "account" | "docs";
+type Tab = "apps" | "webApps" | "support" | "download" | "account";
 type AppOpenRequest = { appId: string; key: number } | null;
 
 const BRAND_NAME = "Brainok Store";
@@ -98,12 +102,13 @@ export function App() {
   }
 
   function openApp(appId: string) {
-    setTab("apps");
+    const targetApp = navApps.find((app) => app.appId === appId);
+    setTab(appKind(targetApp) === "web_app" ? "webApps" : "apps");
     setAppOpenRequest({ appId, key: Date.now() });
   }
 
   function openDonationPanel() {
-    setTab("pricing");
+    setTab("support");
     window.setTimeout(() => {
       document.getElementById("kofi-tip-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 0);
@@ -199,7 +204,11 @@ export function App() {
   }, [profile, user]);
 
   const sortedNavApps = useMemo(
-    () => [...navApps].filter((app) => app.status !== "archived").sort((left, right) => left.name.localeCompare(right.name)),
+    () => sortAppsForDisplay(navApps.filter((app) => app.status !== "archived" && appKind(app) === "application")),
+    [navApps]
+  );
+  const sortedWebApps = useMemo(
+    () => sortAppsForDisplay(navApps.filter((app) => app.status !== "archived" && appKind(app) === "web_app")),
     [navApps]
   );
 
@@ -213,6 +222,33 @@ export function App() {
           openAppRequest={appOpenRequest}
           onError={setError}
           onOpenAccount={() => setTab("account")}
+          appType="application"
+          emptyTitle="Applications"
+          emptyAdminCopy="No applications yet. Use the publisher above to create the first application."
+          emptyPublicCopy="No public applications yet. Sign in with your admin account to publish one."
+          eyebrow="Applications"
+          title="Choose an application"
+          intro="Applications are listed sideways. Each app can have separate Windows and Mac installers, a 30-day trial, and activation/redeem codes."
+        />
+      );
+    }
+
+    if (tab === "webApps") {
+      return (
+        <AppsView
+          user={user}
+          profile={profile}
+          homeResetKey={homeResetKey}
+          openAppRequest={appOpenRequest}
+          onError={setError}
+          onOpenAccount={() => setTab("account")}
+          appType="web_app"
+          emptyTitle="Web App"
+          emptyAdminCopy="No web apps yet. Create one and set its type to Web App."
+          emptyPublicCopy="No public web apps yet."
+          eyebrow="Web App"
+          title="Choose a web app"
+          intro="Web apps are listed separately from downloadable applications, so visitors can find browser-based tools quickly."
         />
       );
     }
@@ -225,12 +261,8 @@ export function App() {
       return <AccountView user={user} profile={profile} siteSettings={siteSettings} onError={setError} />;
     }
 
-    if (tab === "docs") {
-      return <DocsView />;
-    }
-
-    return <PricingView apps={sortedNavApps} user={user} profile={profile} siteSettings={siteSettings} onError={setError} />;
-  }, [appOpenRequest, homeResetKey, profile, siteSettings, sortedNavApps, tab, user]);
+    return <PricingView apps={[...sortedNavApps, ...sortedWebApps]} user={user} profile={profile} siteSettings={siteSettings} onError={setError} />;
+  }, [appOpenRequest, homeResetKey, profile, siteSettings, sortedNavApps, sortedWebApps, tab, user]);
 
   if (!ready) {
     return <main className="page-shell">Loading...</main>;
@@ -248,19 +280,19 @@ export function App() {
           <div className="nav-menu-item">
             <button className={tab === "apps" ? "tab active" : "tab"} onClick={goHome}>
               <Package size={17} />
-              Product
+              Applications
               <ChevronDown size={15} />
             </button>
             <div className="mega-menu product-mega" role="menu">
               <div>
-                <span className="mega-heading">Product</span>
+                <span className="mega-heading">Applications</span>
                 {sortedNavApps.length > 0 ? (
                   sortedNavApps.slice(0, 10).map((app) => (
                     <button className="product-menu-app" key={app.appId} onClick={() => openApp(app.appId)}>
                       <MenuAppIcon app={app} />
                       <span>
                         <strong>{app.name}</strong>
-                        <small>{app.category || app.downloads?.latestVersion || "Desktop app"}</small>
+                        <small>{app.category || app.downloads?.latestVersion || "Application"}</small>
                       </span>
                     </button>
                   ))
@@ -268,7 +300,7 @@ export function App() {
                   <button onClick={goHome}>
                     <Package size={22} />
                     <span>
-                      <strong>No public apps yet</strong>
+                      <strong>No public applications yet</strong>
                       <small>Published apps will appear here</small>
                     </span>
                   </button>
@@ -276,18 +308,18 @@ export function App() {
                 <button className="menu-footer-action" onClick={goHome}>
                   <Package size={22} />
                   <span>
-                    <strong>All apps</strong>
-                    <small>Open the app board</small>
+                    <strong>All applications</strong>
+                    <small>Open the applications board</small>
                   </span>
                 </button>
               </div>
             </div>
           </div>
-          <TabButton active={tab === "pricing"} onClick={() => setTab("pricing")} icon={<ReceiptText size={17} />}>
-            Support
+          <TabButton active={tab === "webApps"} onClick={() => setTab("webApps")} icon={<Globe2 size={17} />}>
+            Web App
           </TabButton>
-          <TabButton active={tab === "docs"} onClick={() => setTab("docs")} icon={<BookOpen size={17} />}>
-            Docs
+          <TabButton active={tab === "support"} onClick={() => setTab("support")} icon={<ReceiptText size={17} />}>
+            Support
           </TabButton>
         </nav>
 
@@ -418,7 +450,7 @@ function PricingView({
 }) {
   const [selectedSupportAppId, setSelectedSupportAppId] = useState<string | null>(null);
   const supportApps = useMemo(
-    () => apps.filter((app) => app.status === "active").sort((left, right) => left.name.localeCompare(right.name)),
+    () => sortAppsForDisplay(apps.filter((app) => app.status === "active")),
     [apps]
   );
   const selectedSupportApp = selectedSupportAppId
@@ -723,7 +755,14 @@ function AppsView({
   homeResetKey,
   openAppRequest,
   onError,
-  onOpenAccount
+  onOpenAccount,
+  appType,
+  emptyTitle,
+  emptyAdminCopy,
+  emptyPublicCopy,
+  eyebrow,
+  title,
+  intro
 }: {
   user: User | null;
   profile: UserProfile | null;
@@ -731,6 +770,13 @@ function AppsView({
   openAppRequest: AppOpenRequest;
   onError: (message: string | null) => void;
   onOpenAccount: () => void;
+  appType: AppType;
+  emptyTitle: string;
+  emptyAdminCopy: string;
+  emptyPublicCopy: string;
+  eyebrow: string;
+  title: string;
+  intro: string;
 }) {
   const [apps, setApps] = useState<BrainokApp[]>([]);
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
@@ -750,6 +796,10 @@ function AppsView({
 
   const canManageApps = Boolean(user && isAdminProfile(profile));
   const visibleApps = apps.filter((app) => {
+    if (appKind(app) !== appType) {
+      return false;
+    }
+
     if (canManageApps) {
       return true;
     }
@@ -764,10 +814,7 @@ function AppsView({
 
     return profile?.apps?.[app.appId]?.accessStatus === "active";
   });
-  const sortedApps = useMemo(
-    () => [...visibleApps].sort((left, right) => left.name.localeCompare(right.name)),
-    [visibleApps]
-  );
+  const sortedApps = useMemo(() => sortAppsForDisplay(visibleApps), [visibleApps]);
   const selectedApp = selectedAppId ? sortedApps.find((app) => app.appId === selectedAppId) || null : null;
   const floatingDemoVideoUrl = floatingDemoApp?.media?.videoUrl || null;
   const floatingDemoEmbedUrl = youtubeEmbedUrlFrom(floatingDemoVideoUrl, "player");
@@ -844,22 +891,17 @@ function AppsView({
         />
       ) : sortedApps.length === 0 ? (
         <section className="account-panel">
-          <h2>App board</h2>
+          <h2>{emptyTitle}</h2>
           <p className="panel-copy">
-            {canManageApps
-              ? "No apps yet. Use the publisher above to create the first app."
-              : "No public apps yet. Sign in with your admin account to publish one."}
+            {canManageApps ? emptyAdminCopy : emptyPublicCopy}
           </p>
         </section>
       ) : (
         <section className="app-rail-section" aria-labelledby="app-rail-title">
           <div className="section-heading">
-            <span className="mini-label">App board</span>
-            <h2 id="app-rail-title">Choose an app</h2>
-            <p>
-              Apps are listed sideways. Each app can have separate Windows and Mac
-              installers, a 30-day trial, and activation/redeem codes.
-            </p>
+            <span className="mini-label">{eyebrow}</span>
+            <h2 id="app-rail-title">{title}</h2>
+            <p>{intro}</p>
           </div>
 
           <div className="app-board" role="list">
@@ -1234,7 +1276,7 @@ function AppDetailView({
       </div>
 
       <article className="app-detail-body">
-        <span className="mini-label">Product overview</span>
+        <span className="mini-label">Application overview</span>
         <MarkdownView
           className="markdown-view app-detail-description"
           content={app.shortDescription || compactAppDescription(app)}
@@ -1572,17 +1614,28 @@ function AppPublisher({
               Category
               <input value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} placeholder="Research, clinic, writing..." />
             </label>
+            <label>
+              App type
+              <select value={draft.appType} onChange={(event) => setDraft({ ...draft, appType: event.target.value as AppType })}>
+                <option value="application">Application</option>
+                <option value="web_app">Web App</option>
+              </select>
+            </label>
+            <label>
+              Display order
+              <input type="number" min="0" step="1" value={draft.sortOrder} onChange={(event) => setDraft({ ...draft, sortOrder: event.target.value })} />
+            </label>
             <label className="wide-field">
-              Product short description
+              Listing short description
               <textarea
                 value={draft.shortDescription}
                 onChange={(event) => setDraft({ ...draft, shortDescription: event.target.value })}
                 rows={3}
-                placeholder="One or two short sentences for the Product page."
+                placeholder="One or two short sentences for the listing page."
               />
             </label>
             <label className="wide-field">
-              Product detail Markdown
+              Listing detail Markdown
               <textarea
                 className="large-description"
                 value={draft.description}
@@ -1872,6 +1925,7 @@ function AccountView({
   const [loginMode, setLoginMode] = useState<"user" | "admin">("admin");
   const [apps, setApps] = useState<BrainokApp[]>([]);
   const [newAppName, setNewAppName] = useState("");
+  const [newAppType, setNewAppType] = useState<AppType>("application");
   const [selectedAppId, setSelectedAppId] = useState("");
   const [appDraft, setAppDraft] = useState<AppDraft>(emptyAppDraft);
   const [appUploadTarget, setAppUploadTarget] = useState<ReleaseUploadTarget>("icon");
@@ -1881,7 +1935,7 @@ function AccountView({
   const [donationUrlSaved, setDonationUrlSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const canManageApps = isAdminProfile(profile);
-  const manageableApps = canManageApps ? apps : apps.filter((app) => app.ownerUid === user?.uid);
+  const manageableApps = sortAppsForDisplay(canManageApps ? apps : apps.filter((app) => app.ownerUid === user?.uid));
   const selectedManagedApp = manageableApps.find((app) => app.appId === selectedAppId) || manageableApps[0] || null;
   const accessibleApps = Object.values(profile?.apps || {}).filter((app) => app.accessStatus === "active");
 
@@ -1977,7 +2031,10 @@ function AccountView({
     try {
       setBusy(true);
       onError(null);
-      const app = await createApp(newAppName);
+      const app = await createApp(newAppName, {
+        appType: newAppType,
+        sortOrder: nextSortOrder(manageableApps.filter((item) => appKind(item) === newAppType))
+      });
       setNewAppName("");
       setSelectedAppId(app.appId);
     } catch (error) {
@@ -2030,6 +2087,42 @@ function AccountView({
       setAppSaveStatus(`Saved ${appDraft.name || selectedManagedApp.name}`);
     } catch (error) {
       onError(error instanceof Error ? error.message : "Could not save app settings.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function moveSelectedApp(direction: "up" | "down") {
+    try {
+      if (!selectedManagedApp) {
+        return;
+      }
+
+      const orderedTypeApps = sortAppsForDisplay(manageableApps.filter((app) => appKind(app) === appKind(selectedManagedApp)));
+      const currentIndex = orderedTypeApps.findIndex((app) => app.appId === selectedManagedApp.appId);
+      const swapIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+      const swapApp = orderedTypeApps[swapIndex];
+
+      if (currentIndex < 0 || !swapApp) {
+        return;
+      }
+
+      setBusy(true);
+      onError(null);
+      setAppSaveStatus(null);
+      await Promise.all([
+        updateApp(selectedManagedApp.appId, {
+          sortOrder: displaySortOrder(swapApp, swapIndex),
+          appType: appKind(selectedManagedApp)
+        }),
+        updateApp(swapApp.appId, {
+          sortOrder: displaySortOrder(selectedManagedApp, currentIndex),
+          appType: appKind(swapApp)
+        })
+      ]);
+      setAppSaveStatus(`Moved ${selectedManagedApp.name} ${direction}`);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "Could not reorder apps.");
     } finally {
       setBusy(false);
     }
@@ -2290,6 +2383,10 @@ function AccountView({
 
             <div className="inline-form">
               <input value={newAppName} onChange={(event) => setNewAppName(event.target.value)} placeholder="New app name" />
+              <select value={newAppType} onChange={(event) => setNewAppType(event.target.value as AppType)} aria-label="New app type">
+                <option value="application">Application</option>
+                <option value="web_app">Web App</option>
+              </select>
               <button className="button secondary" disabled={busy || !newAppName.trim()} onClick={() => void createNewApp()}>
                 <Plus size={18} />
                 Add app
@@ -2302,6 +2399,14 @@ function AccountView({
                   <div className="app-selector-header">
                     <span className="mini-label">Select app to edit</span>
                     {selectedManagedApp ? <strong>Editing: {selectedManagedApp.name}</strong> : null}
+                  </div>
+                  <div className="app-order-actions">
+                    <button className="icon-button" type="button" aria-label="Move selected app up" title="Move up" disabled={busy || !selectedManagedApp} onClick={() => void moveSelectedApp("up")}>
+                      <ArrowUp size={18} />
+                    </button>
+                    <button className="icon-button" type="button" aria-label="Move selected app down" title="Move down" disabled={busy || !selectedManagedApp} onClick={() => void moveSelectedApp("down")}>
+                      <ArrowDown size={18} />
+                    </button>
                   </div>
                   <div className="app-selector-rail" role="list">
                     {manageableApps.map((app) => {
@@ -2322,7 +2427,7 @@ function AccountView({
                           </span>
                           <span className="app-selector-copy">
                             <strong>{app.name}</strong>
-                            <small>{app.category || app.visibility || "Desktop app"}</small>
+                            <small>{appTypeLabel(app)} · order {displaySortOrder(app, manageableApps.indexOf(app))}</small>
                           </span>
                         </button>
                       );
@@ -2339,17 +2444,28 @@ function AccountView({
                     Category
                     <input value={appDraft.category} onChange={(event) => setAppDraft({ ...appDraft, category: event.target.value })} placeholder="Research, writing, clinic..." />
                   </label>
+                  <label>
+                    App type
+                    <select value={appDraft.appType} onChange={(event) => setAppDraft({ ...appDraft, appType: event.target.value as AppType })}>
+                      <option value="application">Application</option>
+                      <option value="web_app">Web App</option>
+                    </select>
+                  </label>
+                  <label>
+                    Display order
+                    <input type="number" min="0" step="1" value={appDraft.sortOrder} onChange={(event) => setAppDraft({ ...appDraft, sortOrder: event.target.value })} />
+                  </label>
                   <label className="wide-field">
-                    Product short description
+                    Listing short description
                     <textarea
                       value={appDraft.shortDescription}
                       onChange={(event) => setAppDraft({ ...appDraft, shortDescription: event.target.value })}
                       rows={3}
-                      placeholder="One or two short sentences for the Product page."
+                      placeholder="One or two short sentences for the listing page."
                     />
                   </label>
                   <label className="wide-field">
-                    Product detail Markdown
+                    Listing detail Markdown
                     <textarea
                       className="large-description"
                       value={appDraft.description}
@@ -2359,7 +2475,7 @@ function AccountView({
                     />
                   </label>
                   <div className="wide-field markdown-preview">
-                    <span className="mini-label">Product Markdown preview</span>
+                    <span className="mini-label">Listing Markdown preview</span>
                     <MarkdownView content={appDraft.description} fallback="Your formatted app description will appear here." />
                   </div>
                   <label className="wide-field">
@@ -2767,6 +2883,8 @@ interface AppDraft {
   description: string;
   supportContent: string;
   category: string;
+  appType: AppType;
+  sortOrder: string;
   visibility: "public" | "private";
   pricingMode: "invite_only" | "free" | "paid" | "donation";
   priceMajor: string;
@@ -2789,6 +2907,8 @@ const emptyAppDraft: AppDraft = {
   description: "",
   supportContent: "",
   category: "",
+  appType: "application",
+  sortOrder: "0",
   visibility: "public",
   pricingMode: "invite_only",
   priceMajor: "0",
@@ -2812,6 +2932,8 @@ function appToDraft(app: BrainokApp): AppDraft {
     description: app.description || "",
     supportContent: app.supportContent || "",
     category: app.category || "",
+    appType: appKind(app),
+    sortOrder: String(displaySortOrder(app, 0)),
     visibility: app.visibility || "public",
     pricingMode: app.pricing?.mode || "invite_only",
     priceMajor: centsToMajor(app.pricing?.priceCents || 0),
@@ -2836,6 +2958,8 @@ function draftToUpdate(draft: AppDraft) {
     description: draft.description,
     supportContent: draft.supportContent,
     category: draft.category,
+    appType: draft.appType,
+    sortOrder: Math.max(0, Math.round(Number(draft.sortOrder || 0))),
     visibility: draft.visibility,
     pricingMode: draft.pricingMode,
     priceCents: Math.max(0, Math.round(Number(draft.priceMajor || 0) * 100)),
@@ -2903,6 +3027,42 @@ function localAppMediaUrl(app: BrainokApp) {
 
 function appIconUrl(app: BrainokApp) {
   return localAppMediaUrl(app) || toDisplayImageUrl(app.media?.iconUrl) || toDisplayImageUrl(app.media?.thumbnailUrl);
+}
+
+function appKind(app: BrainokApp | null | undefined): AppType {
+  return app?.appType === "web_app" ? "web_app" : "application";
+}
+
+function appTypeLabel(app: BrainokApp) {
+  return appKind(app) === "web_app" ? "Web App" : "Application";
+}
+
+function displaySortOrder(app: BrainokApp, fallbackIndex: number) {
+  return typeof app.sortOrder === "number" && Number.isFinite(app.sortOrder)
+    ? app.sortOrder
+    : (fallbackIndex + 1) * 10;
+}
+
+function sortAppsForDisplay(apps: BrainokApp[]) {
+  return apps
+    .map((app, index) => ({ app, index }))
+    .sort((left, right) => {
+    const orderDelta = displaySortOrder(left.app, left.index) - displaySortOrder(right.app, right.index);
+    if (orderDelta !== 0) {
+      return orderDelta;
+    }
+
+    return left.app.name.localeCompare(right.app.name);
+  })
+    .map(({ app }) => app);
+}
+
+function nextSortOrder(apps: BrainokApp[]) {
+  if (apps.length === 0) {
+    return 10;
+  }
+
+  return Math.max(...apps.map((app, index) => displaySortOrder(app, index))) + 10;
 }
 
 function appPrimaryMedia(app: BrainokApp) {
