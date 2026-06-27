@@ -2002,11 +2002,20 @@ function AccountView({
   }
 
   async function signIn() {
+    const signInEmail = loginMode === "admin" && !email.trim() ? ADMIN_EMAIL : email.trim();
+    setEmail(signInEmail);
+    if (!signInEmail) {
+      onError("Enter your email address, or use Google sign-in.");
+      return;
+    }
+    if (!password) {
+      onError(loginMode === "admin" ? "Enter the admin password, or use Google admin." : "Enter your password, or use Google user.");
+      return;
+    }
+
     try {
       setBusy(true);
       onError(null);
-      const signInEmail = loginMode === "admin" && !email.trim() ? ADMIN_EMAIL : email.trim();
-      setEmail(signInEmail);
       await signInWithEmailAndPassword(auth, signInEmail, password);
     } catch (error) {
       onError(error instanceof Error ? error.message : "Sign-in failed.");
@@ -2019,7 +2028,16 @@ function AccountView({
     try {
       setBusy(true);
       onError(null);
-      await signInWithPopup(auth, new GoogleAuthProvider());
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({
+        prompt: "select_account",
+        ...(loginMode === "admin" ? { login_hint: ADMIN_EMAIL } : {})
+      });
+      const credential = await signInWithPopup(auth, provider);
+      if (loginMode === "admin" && credential.user.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+        await signOut(auth);
+        throw new Error(`Choose ${ADMIN_EMAIL} for Google admin login.`);
+      }
     } catch (error) {
       onError(error instanceof Error ? error.message : "Google sign-in failed.");
     } finally {
