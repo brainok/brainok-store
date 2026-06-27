@@ -1,0 +1,109 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function userEditableKeys() {
+      return [
+        'displayName',
+        'photoURL',
+        'lastLoginAt',
+        'updatedAt'
+      ];
+    }
+
+    function isPostAuthor() {
+      return signedIn() && resource.data.authorUid == request.auth.uid;
+    }
+
+    function isIncomingPostAuthor() {
+      return signedIn() && request.resource.data.authorUid == request.auth.uid;
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.planType == 'free'
+        && request.resource.data.licenseStatus in ['free', 'inactive']
+        && request.resource.data.subscriptionProvider == null;
+
+      allow update: if isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(userEditableKeys());
+
+      allow delete: if false;
+
+      match /posts/{postId} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+
+    match /public_posts/{postId} {
+      allow read: if resource.data.publish == true;
+      allow create: if isIncomingPostAuthor();
+      allow update: if isPostAuthor() && isIncomingPostAuthor();
+      allow delete: if isPostAuthor();
+    }
+
+    match /devices/{deviceId} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /apps/{appId} {
+      allow read: if signedIn() || resource.data.visibility == 'public';
+      allow write: if false;
+    }
+
+    match /site/{docId} {
+      allow read: if docId == 'public';
+      allow write: if false;
+    }
+
+    match /invites/{code} {
+      allow read: if signedIn()
+        && (resource.data.inviterUid == request.auth.uid || resource.data.usedBy == request.auth.uid);
+      allow write: if false;
+    }
+
+    match /subscriptions/{subscriptionId} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /donations/{donationId} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /appQuestions/{questionId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /purchases/{purchaseId} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /webhookEvents/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /pendingPayments/{paymentId} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

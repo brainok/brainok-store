@@ -1,0 +1,27 @@
+﻿# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+
+# Firebase
+.firebase/
+firebase-debug.log
+
+# Environment
+.env
+.env.local
+
+# Node
+node_modules/
+
+# Build
+dist/
+build/
