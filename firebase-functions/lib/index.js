@@ -733,8 +733,11 @@ function appSettingsFromRequest(data, defaults = {}) {
     const billingInterval = oneOf(data.billingInterval, ["one_time", "monthly", "yearly", "pay_what_you_want"], defaults.billingInterval || "one_time");
     return {
         shortDescription: textField(data.shortDescription, defaults.shortDescription ?? "", 260),
-        description: textField(data.description, defaults.description ?? "", 6000),
-        supportContent: textField(data.supportContent, defaults.supportContent ?? "", 10000),
+        shortDescriptionKo: textField(data.shortDescriptionKo, defaults.shortDescriptionKo ?? "", 260),
+        description: textField(data.description, defaults.description ?? "", 20000),
+        descriptionKo: textField(data.descriptionKo, defaults.descriptionKo ?? "", 20000),
+        supportContent: textField(data.supportContent, defaults.supportContent ?? "", 20000),
+        supportContentKo: textField(data.supportContentKo, defaults.supportContentKo ?? "", 20000),
         category: asString(data.category) ?? defaults.category ?? "",
         visibility: oneOf(data.visibility, ["public", "private"], defaults.visibility || "public"),
         appType: oneOf(data.appType, ["application", "web_app"], defaults.appType || "application"),
@@ -866,8 +869,11 @@ export const updateApp = onCall({ region }, async (request) => {
             appType: oneOf(app.appType, ["application", "web_app"], "application"),
             sortOrder: asNumber(app.sortOrder) ?? 0,
             description: asString(app.description) || "",
+            descriptionKo: asString(app.descriptionKo) || "",
             shortDescription: asString(app.shortDescription) || "",
+            shortDescriptionKo: asString(app.shortDescriptionKo) || "",
             supportContent: asString(app.supportContent) || "",
+            supportContentKo: asString(app.supportContentKo) || "",
             category: asString(app.category) || ""
         });
         transaction.update(appRef, {

@@ -987,8 +987,11 @@ function appSettingsFromRequest(
     appType?: AppType;
     sortOrder?: number;
     shortDescription?: string;
+    shortDescriptionKo?: string;
     description?: string;
+    descriptionKo?: string;
     supportContent?: string;
+    supportContentKo?: string;
     category?: string;
   } = {}
 ) {
@@ -1005,8 +1008,11 @@ function appSettingsFromRequest(
 
   return {
     shortDescription: textField(data.shortDescription, defaults.shortDescription ?? "", 260),
-    description: textField(data.description, defaults.description ?? "", 6000),
-    supportContent: textField(data.supportContent, defaults.supportContent ?? "", 10000),
+    shortDescriptionKo: textField(data.shortDescriptionKo, defaults.shortDescriptionKo ?? "", 260),
+    description: textField(data.description, defaults.description ?? "", 20000),
+    descriptionKo: textField(data.descriptionKo, defaults.descriptionKo ?? "", 20000),
+    supportContent: textField(data.supportContent, defaults.supportContent ?? "", 20000),
+    supportContentKo: textField(data.supportContentKo, defaults.supportContentKo ?? "", 20000),
     category: asString(data.category) ?? defaults.category ?? "",
     visibility: oneOf<AppVisibility>(
       data.visibility,
@@ -1183,8 +1189,11 @@ export const updateApp = onCall({ region }, async (request) => {
       ),
       sortOrder: asNumber(app.sortOrder) ?? 0,
       description: asString(app.description) || "",
+      descriptionKo: asString(app.descriptionKo) || "",
       shortDescription: asString(app.shortDescription) || "",
+      shortDescriptionKo: asString(app.shortDescriptionKo) || "",
       supportContent: asString(app.supportContent) || "",
+      supportContentKo: asString(app.supportContentKo) || "",
       category: asString(app.category) || ""
     });
 

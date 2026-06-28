@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import type { ClipboardEvent, ReactNode } from "react";
 import {
   GoogleAuthProvider,
   User,
@@ -14,7 +14,6 @@ import {
   ArrowUp,
   BookOpen,
   ChevronDown,
-  Copy,
   Download,
   ExternalLink,
   Globe2,
@@ -43,16 +42,12 @@ import {
   SiteSettings,
   SupportResource,
   UserProfile,
-  ActivationCodeSummary,
   answerAppQuestion,
   askAppQuestion,
-  createActivationCode,
   createApp,
-  createSharedAccessCode,
   ensureUserProfile,
   grantFreeAppAccess,
-  listMyActivationCodes,
-  redeemSharedAccessCode,
+  getAppFromServer,
   updateSiteSettings,
   updateApp,
   uploadAppReleaseFile,
@@ -66,6 +61,9 @@ import {
 
 type Tab = "apps" | "webApps" | "support" | "download" | "account";
 type AppOpenRequest = { appId: string; key: number } | null;
+type Language = "ko" | "en";
+type ReadmeLanguage = "en" | "ko";
+type MarkdownDraftField = "description" | "descriptionKo";
 
 const BRAND_NAME = "Brainok Store";
 const BRAND_LOGO_SRC = "/brainok-store-logo.png";
@@ -83,6 +81,306 @@ const LOCAL_APP_MEDIA: Record<string, string> = {
   "recent-file-launcher": "/app-media/recent-file-launcher.jpg",
   "recent-file-launcher-2c4ea8": "/app-media/recent-file-launcher.jpg"
 };
+const LANGUAGE_STORAGE_KEY = "brainok-store-language";
+
+const UI_TEXT = {
+  ko: {
+    loading: "불러오는 중...",
+    navLabel: "주요 메뉴",
+    applications: "응용 프로그램",
+    application: "응용 프로그램",
+    webApp: "웹 앱",
+    support: "지원",
+    account: "계정",
+    signOut: "로그아웃",
+    languageToggle: "English",
+    languageFlag: "🇺🇸",
+    kofiTitle: "Ko-fi 후원 폼 열기. Brainok Store 로그인은 필요하지 않습니다.",
+    donateAlt: "Ko-fi에서 후원",
+    noPublicApplications: "공개된 응용 프로그램이 아직 없습니다",
+    publishedAppsAppear: "게시된 앱이 여기에 표시됩니다",
+    allApplications: "전체 응용 프로그램",
+    openApplicationsBoard: "응용 프로그램 목록 열기",
+    apps: {
+      applicationsEmptyTitle: "응용 프로그램",
+      applicationsEmptyAdminCopy: "응용 프로그램이 아직 없습니다. 게시 도구에서 첫 앱을 만들어 주세요.",
+      applicationsEmptyPublicCopy: "공개된 응용 프로그램이 아직 없습니다. 관리자 계정으로 로그인해 게시할 수 있습니다.",
+      applicationsEyebrow: "응용 프로그램",
+      applicationsTitle: "응용 프로그램 선택",
+      applicationsIntro: "앱은 가로 목록으로 정리됩니다. Windows/Mac 설치 파일, 30일 체험판, 활성화 번호를 앱별로 관리할 수 있습니다.",
+      webEmptyTitle: "웹 앱",
+      webEmptyAdminCopy: "웹 앱이 아직 없습니다. 앱을 만들고 종류를 Web App으로 설정하세요.",
+      webEmptyPublicCopy: "공개된 웹 앱이 아직 없습니다.",
+      webEyebrow: "웹 앱",
+      webTitle: "웹 앱 선택",
+      webIntro: "브라우저에서 사용하는 도구를 다운로드 앱과 분리해 빠르게 찾을 수 있습니다.",
+      boardWaitingTitle: "앱 목록 접근을 기다리는 중",
+      boardWaitingCopy: "Firestore가 이 세션의 앱 목록을 막았습니다. 관리자 계정으로 로그인한 뒤 규칙 배포가 끝나면 새로고침하세요.",
+      signInBeforeAdding: "앱을 계정에 추가하려면 먼저 로그인하세요.",
+      addAccessFailed: "앱 접근 권한을 추가하지 못했습니다.",
+      openApp: (name: string) => `${name} 열기`,
+      fallbackDescription: "앱을 설치하고 체험판을 사용한 뒤, 받은 코드가 있으면 입력하세요.",
+      fallbackMarkdown: "데스크톱 앱 접근 권한, 릴리스, 활성화 번호를 여기에서 관리합니다.",
+      access: "접근",
+      active: "활성",
+      trial: "30일 체험판",
+      version: "버전",
+      noBuildYet: "빌드 없음",
+      activated: "활성화됨",
+      addToAccount: "계정에 추가",
+      buyAccess: "구매",
+      checkoutMissing: "결제 링크 없음",
+      activateInApp: "앱에서 활성화",
+      release: "릴리스",
+      docs: "문서",
+      demo: "데모",
+      note: "먼저 다운로드하세요. 앱을 실행하면 30일 체험판이 시작됩니다. 교환/활성화 코드를 받았다면 앱 안에서 입력해 계속 무료로 사용할 수 있습니다.",
+      allApps: "전체 앱",
+      floating: "크게 보기",
+      openFloating: (name: string) => `${name} 데모를 떠 있는 플레이어로 열기`,
+      floatingTitle: "더블클릭하면 떠 있는 플레이어로 열립니다",
+      demoVideo: "데모 영상",
+      openSavedVideo: "저장된 영상 링크를 새 탭에서 엽니다.",
+      openDemo: "데모 열기",
+      overview: "앱 개요",
+      overviewFallback: "설치 안내, 문제 해결, QnA는 지원 페이지에서 확인하세요.",
+      closeFloating: "떠 있는 플레이어 닫기",
+      floatingDemoLabel: (name: string) => `${name} 데모 영상`,
+      desktopApp: "데스크톱 앱",
+      publicLabel: "공개"
+    },
+    supportPage: {
+      chooseApp: "아래 앱을 선택해 지원 페이지를 여세요.",
+      noApps: "앱이 아직 없습니다",
+      openSupport: "지원 열기",
+      tipPanel: "후원 패널",
+      supportStore: "Brainok Store 후원",
+      donationCopy: "후원할 때 표시 이름과 메시지를 남길 수 있습니다. Brainok Store 로그인은 필요하지 않습니다.",
+      openKofi: "Ko-fi 후원 폼 열기",
+      allSupport: "전체 지원",
+      supportGuide: "지원 안내",
+      supportFallback: "이 앱의 설치 방법, 문제 해결, 알려진 문제, 연락 방법을 추가하세요.",
+      teaserFallback: "설치 안내, 문제 해결, 앱별 QnA를 보려면 지원을 여세요."
+    },
+    qna: {
+      loadFailed: "QnA를 불러오지 못했습니다.",
+      signInBeforeAsk: "지원 질문을 하려면 먼저 로그인하세요.",
+      writeMore: "제출하기 전에 조금 더 자세히 적어 주세요.",
+      submitFailed: "질문을 제출하지 못했습니다.",
+      writeAnswer: "답변을 먼저 작성하세요.",
+      saveFailed: "답변을 저장하지 못했습니다.",
+      label: "앱 QnA",
+      title: "질문",
+      intro: "사용자는 앱별 질문을 남길 수 있고, 관리자 답변은 각 질문 아래에 표시됩니다.",
+      ask: "질문하기",
+      placeholder: "예: 30일 체험판 이후 이 앱을 어떻게 활성화하나요?",
+      submit: "질문 제출",
+      signInPrompt: "지원 질문을 하려면 로그인하세요.",
+      noQuestions: "아직 질문이 없습니다.",
+      user: "사용자",
+      adminAnswer: "관리자 답변",
+      answerPlaceholder: "관리자 답변을 작성하세요...",
+      saveAnswer: "답변 저장",
+      waiting: "관리자 답변 대기 중",
+      justNow: "방금 전"
+    },
+    download: {
+      noApps: "다운로드 가능한 공개 앱이 아직 없습니다.",
+      freeDownloads: "무료 다운로드",
+      buildSoon: "준비 중",
+      note: "신용카드는 필요 없습니다. 앱을 실행하면 30일 체험판이 시작되고, 앱 안에서 활성화 번호를 입력할 수 있습니다.",
+      downloadWin: "Windows 다운로드",
+      downloadMac: "Mac 다운로드",
+      releasePage: "릴리스 페이지"
+    },
+    accountView: {
+      chooseType: "계정 유형 선택",
+      adminSignIn: "관리자 로그인",
+      userSignIn: "사용자 로그인",
+      adminIntro: (email: string) => `${email} 전용입니다. 이 계정은 앱 게시, 사이트 편집, 초대 코드 생성을 담당합니다.`,
+      userIntro: "앱 다운로드와 초대 코드 등록에 사용합니다.",
+      loginType: "로그인 유형",
+      userLogin: "사용자 로그인",
+      userLoginSub: "초대 및 다운로드",
+      adminLogin: "관리자 로그인",
+      email: "이메일",
+      password: "비밀번호",
+      signInAdmin: "관리자로 로그인",
+      signInUser: "사용자로 로그인",
+      googleAdmin: "Google 관리자",
+      googleUser: "Google 사용자",
+      enterEmail: "이메일 주소를 입력하거나 Google 로그인을 사용하세요.",
+      enterAdminPassword: "관리자 비밀번호를 입력하거나 Google 관리자를 사용하세요.",
+      enterUserPassword: "비밀번호를 입력하거나 Google 사용자를 사용하세요.",
+      signInFailed: "로그인하지 못했습니다.",
+      chooseAdmin: (email: string) => `Google 관리자 로그인에는 ${email} 계정을 선택하세요.`,
+      googleFailed: "Google 로그인에 실패했습니다.",
+      normalWarning: (email: string) => `이 계정은 일반 사용자로 로그인되어 있습니다. 관리자 도구는 ${email} 계정에서만 표시됩니다.`,
+      access: "접근",
+      role: "역할",
+      deviceLimit: "기기 제한",
+      supporter: "후원 상태",
+      totalDonated: "총 후원",
+      inviteQuota: "초대 한도",
+      managedApps: "관리 앱",
+      loading: "불러오는 중",
+      appsCount: (count: number) => `${count}개 앱`
+    }
+  },
+  en: {
+    loading: "Loading...",
+    navLabel: "Main navigation",
+    applications: "Applications",
+    application: "Application",
+    webApp: "Web App",
+    support: "Support",
+    account: "Account",
+    signOut: "Sign out",
+    languageToggle: "한국어",
+    languageFlag: "🇰🇷",
+    kofiTitle: "Open the Ko-fi tip form. Brainok Store sign-in is not required.",
+    donateAlt: "Donate on Ko-fi",
+    noPublicApplications: "No public applications yet",
+    publishedAppsAppear: "Published apps will appear here",
+    allApplications: "All applications",
+    openApplicationsBoard: "Open the applications board",
+    apps: {
+      applicationsEmptyTitle: "Applications",
+      applicationsEmptyAdminCopy: "No applications yet. Use the publisher above to create the first application.",
+      applicationsEmptyPublicCopy: "No public applications yet. Sign in with your admin account to publish one.",
+      applicationsEyebrow: "Applications",
+      applicationsTitle: "Choose an application",
+      applicationsIntro: "Applications are listed sideways. Each app can have separate Windows and Mac installers, a 30-day trial, and activation/redeem codes.",
+      webEmptyTitle: "Web App",
+      webEmptyAdminCopy: "No web apps yet. Create one and set its type to Web App.",
+      webEmptyPublicCopy: "No public web apps yet.",
+      webEyebrow: "Web App",
+      webTitle: "Choose a web app",
+      webIntro: "Web apps are listed separately from downloadable applications, so visitors can find browser-based tools quickly.",
+      boardWaitingTitle: "App board is waiting for access",
+      boardWaitingCopy: "Firestore blocked the app list for this session. Sign in with your admin account, then refresh this page after rules finish deploying.",
+      signInBeforeAdding: "Sign in before adding an app to your account.",
+      addAccessFailed: "Could not add app access.",
+      openApp: (name: string) => `Open ${name}`,
+      fallbackDescription: "Install the app, use the trial, then enter a redeem code if you received one.",
+      fallbackMarkdown: "Desktop app access, releases, and activation numbers are managed here.",
+      access: "Access",
+      active: "Active",
+      trial: "30-day trial",
+      version: "Version",
+      noBuildYet: "No build yet",
+      activated: "Activated",
+      addToAccount: "Add to account",
+      buyAccess: "Buy access",
+      checkoutMissing: "Checkout link not set",
+      activateInApp: "Activate in app",
+      release: "Release",
+      docs: "Docs",
+      demo: "Demo",
+      note: "Download first. A 30-day trial starts in the app. If you received a redeem/activation code, enter it in the app to keep using it free.",
+      allApps: "All apps",
+      floating: "Floating",
+      openFloating: (name: string) => `Open ${name} demo in a floating player`,
+      floatingTitle: "Double-click to open a floating player",
+      demoVideo: "Demo video",
+      openSavedVideo: "Open the saved video link in a new tab.",
+      openDemo: "Open demo",
+      overview: "Application overview",
+      overviewFallback: "Open the Support page for install notes, troubleshooting, and QnA.",
+      closeFloating: "Close floating player",
+      floatingDemoLabel: (name: string) => `${name} floating demo video`,
+      desktopApp: "Desktop app",
+      publicLabel: "public"
+    },
+    supportPage: {
+      chooseApp: "Choose an app below to open support.",
+      noApps: "No apps yet",
+      openSupport: "Open support",
+      tipPanel: "Tip Panel",
+      supportStore: "Support Brainok Store",
+      donationCopy: "Leave a display name and message with your donation. Brainok Store sign-in is not required.",
+      openKofi: "Open Ko-fi tip form",
+      allSupport: "All support",
+      supportGuide: "Support guide",
+      supportFallback: "Add install notes, troubleshooting steps, known issues, and contact guidance for this app.",
+      teaserFallback: "Open support for install notes, troubleshooting, and app-specific QnA."
+    },
+    qna: {
+      loadFailed: "Could not load QnA.",
+      signInBeforeAsk: "Sign in before asking a support question.",
+      writeMore: "Write a little more before submitting.",
+      submitFailed: "Could not submit question.",
+      writeAnswer: "Write an answer first.",
+      saveFailed: "Could not save answer.",
+      label: "App QnA",
+      title: "Questions",
+      intro: "Users can ask app-specific questions here. Admin answers appear under each question.",
+      ask: "Ask a question",
+      placeholder: "Example: How do I activate this app after the 30-day trial?",
+      submit: "Submit question",
+      signInPrompt: "Sign in to ask a support question.",
+      noQuestions: "No questions yet.",
+      user: "User",
+      adminAnswer: "Admin answer",
+      answerPlaceholder: "Write an admin answer...",
+      saveAnswer: "Save answer",
+      waiting: "Waiting for admin answer",
+      justNow: "just now"
+    },
+    download: {
+      noApps: "No public apps are ready for download yet.",
+      freeDownloads: "Free downloads",
+      buildSoon: "Build soon",
+      note: "No credit card needed. The app starts a 30-day trial and accepts an activation number inside the app.",
+      downloadWin: "Download Win",
+      downloadMac: "Download Mac",
+      releasePage: "Release page"
+    },
+    accountView: {
+      chooseType: "Choose account type",
+      adminSignIn: "Admin sign in",
+      userSignIn: "User sign in",
+      adminIntro: (email: string) => `Use this only for ${email}. This account publishes apps, edits the site, and creates invite codes.`,
+      userIntro: "Use this for downloading apps and redeeming invite codes.",
+      loginType: "Login type",
+      userLogin: "User login",
+      userLoginSub: "Invite and download",
+      adminLogin: "Admin login",
+      email: "Email",
+      password: "Password",
+      signInAdmin: "Sign in as admin",
+      signInUser: "Sign in as user",
+      googleAdmin: "Google admin",
+      googleUser: "Google user",
+      enterEmail: "Enter your email address, or use Google sign-in.",
+      enterAdminPassword: "Enter the admin password, or use Google admin.",
+      enterUserPassword: "Enter your password, or use Google user.",
+      signInFailed: "Sign-in failed.",
+      chooseAdmin: (email: string) => `Choose ${email} for Google admin login.`,
+      googleFailed: "Google sign-in failed.",
+      normalWarning: (email: string) => `This account is signed in as a normal user. Admin tools are hidden because only ${email} can be admin.`,
+      access: "Access",
+      role: "Role",
+      deviceLimit: "Device limit",
+      supporter: "Supporter",
+      totalDonated: "Total donated",
+      inviteQuota: "Invite quota",
+      managedApps: "Managed apps",
+      loading: "Loading",
+      appsCount: (count: number) => `${count} app(s)`
+    }
+  }
+} as const;
+
+type UiText = (typeof UI_TEXT)[Language];
+
+function readPreferredLanguage(): Language {
+  try {
+    return localStorage.getItem(LANGUAGE_STORAGE_KEY) === "en" ? "en" : "ko";
+  } catch {
+    return "ko";
+  }
+}
 
 export function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -94,6 +392,15 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [homeResetKey, setHomeResetKey] = useState(0);
   const [appOpenRequest, setAppOpenRequest] = useState<AppOpenRequest>(null);
+  const [language, setLanguage] = useState<Language>(readPreferredLanguage);
+  const text = UI_TEXT[language];
+  const localizedSiteSettings = useMemo(() => language === "ko" ? {
+    ...siteSettings,
+    primaryCtaLabel: "무료 다운로드",
+    downloadTitle: "Brainok Store 다운로드",
+    downloadSubtitle: "신용카드 없이 시작",
+    downloadBody: "운영체제에 맞는 설치 파일을 선택하세요. 데스크톱 앱은 30일 체험판으로 시작하고 앱 안에서 활성화 번호를 입력할 수 있습니다."
+  } : siteSettings, [language, siteSettings]);
 
   function goHome() {
     setTab("apps");
@@ -112,6 +419,10 @@ export function App() {
     window.setTimeout(() => {
       document.getElementById("kofi-tip-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 0);
+  }
+
+  function toggleLanguage() {
+    setLanguage((currentLanguage) => currentLanguage === "ko" ? "en" : "ko");
   }
 
   useEffect(() => {
@@ -157,6 +468,14 @@ export function App() {
     document.body.appendChild(script);
     return undefined;
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+    } catch {
+      // Language persistence is optional; the UI still works without storage.
+    }
+  }, [language]);
 
   useEffect(() => {
     let authStateResolved = false;
@@ -223,12 +542,14 @@ export function App() {
           onError={setError}
           onOpenAccount={() => setTab("account")}
           appType="application"
-          emptyTitle="Applications"
-          emptyAdminCopy="No applications yet. Use the publisher above to create the first application."
-          emptyPublicCopy="No public applications yet. Sign in with your admin account to publish one."
-          eyebrow="Applications"
-          title="Choose an application"
-          intro="Applications are listed sideways. Each app can have separate Windows and Mac installers, a 30-day trial, and activation/redeem codes."
+          emptyTitle={text.apps.applicationsEmptyTitle}
+          emptyAdminCopy={text.apps.applicationsEmptyAdminCopy}
+          emptyPublicCopy={text.apps.applicationsEmptyPublicCopy}
+          eyebrow={text.apps.applicationsEyebrow}
+          title={text.apps.applicationsTitle}
+          intro={text.apps.applicationsIntro}
+          language={language}
+          text={text}
         />
       );
     }
@@ -243,29 +564,31 @@ export function App() {
           onError={setError}
           onOpenAccount={() => setTab("account")}
           appType="web_app"
-          emptyTitle="Web App"
-          emptyAdminCopy="No web apps yet. Create one and set its type to Web App."
-          emptyPublicCopy="No public web apps yet."
-          eyebrow="Web App"
-          title="Choose a web app"
-          intro="Web apps are listed separately from downloadable applications, so visitors can find browser-based tools quickly."
+          emptyTitle={text.apps.webEmptyTitle}
+          emptyAdminCopy={text.apps.webEmptyAdminCopy}
+          emptyPublicCopy={text.apps.webEmptyPublicCopy}
+          eyebrow={text.apps.webEyebrow}
+          title={text.apps.webTitle}
+          intro={text.apps.webIntro}
+          language={language}
+          text={text}
         />
       );
     }
 
     if (tab === "download") {
-      return <DownloadView apps={sortedNavApps} siteSettings={siteSettings} />;
+      return <DownloadView apps={sortedNavApps} siteSettings={localizedSiteSettings} language={language} text={text} />;
     }
 
     if (tab === "account") {
-      return <AccountView user={user} profile={profile} siteSettings={siteSettings} onError={setError} />;
+      return <AccountView user={user} profile={profile} siteSettings={localizedSiteSettings} onError={setError} text={text} />;
     }
 
-    return <PricingView apps={[...sortedNavApps, ...sortedWebApps]} user={user} profile={profile} siteSettings={siteSettings} onError={setError} />;
-  }, [appOpenRequest, homeResetKey, profile, siteSettings, sortedNavApps, sortedWebApps, tab, user]);
+    return <PricingView apps={[...sortedNavApps, ...sortedWebApps]} user={user} profile={profile} siteSettings={localizedSiteSettings} onError={setError} language={language} text={text} />;
+  }, [appOpenRequest, homeResetKey, language, localizedSiteSettings, profile, sortedNavApps, sortedWebApps, tab, text, user]);
 
   if (!ready) {
-    return <main className="page-shell">Loading...</main>;
+    return <main className="page-shell">{text.loading}</main>;
   }
 
   return (
@@ -276,23 +599,23 @@ export function App() {
           <strong>{BRAND_NAME}</strong>
         </button>
 
-        <nav className="tabs" aria-label="Main navigation">
+        <nav className="tabs" aria-label={text.navLabel}>
           <div className="nav-menu-item">
             <button className={tab === "apps" ? "tab active" : "tab"} onClick={goHome}>
               <Package size={17} />
-              Applications
+              {text.applications}
               <ChevronDown size={15} />
             </button>
             <div className="mega-menu product-mega" role="menu">
               <div>
-                <span className="mega-heading">Applications</span>
+                <span className="mega-heading">{text.applications}</span>
                 {sortedNavApps.length > 0 ? (
                   sortedNavApps.slice(0, 10).map((app) => (
                     <button className="product-menu-app" key={app.appId} onClick={() => openApp(app.appId)}>
                       <MenuAppIcon app={app} />
                       <span>
                         <strong>{app.name}</strong>
-                        <small>{app.category || app.downloads?.latestVersion || "Application"}</small>
+                        <small>{app.category || app.downloads?.latestVersion || text.application}</small>
                       </span>
                     </button>
                   ))
@@ -300,32 +623,32 @@ export function App() {
                   <button onClick={goHome}>
                     <Package size={22} />
                     <span>
-                      <strong>No public applications yet</strong>
-                      <small>Published apps will appear here</small>
+                      <strong>{text.noPublicApplications}</strong>
+                      <small>{text.publishedAppsAppear}</small>
                     </span>
                   </button>
                 )}
                 <button className="menu-footer-action" onClick={goHome}>
                   <Package size={22} />
                   <span>
-                    <strong>All applications</strong>
-                    <small>Open the applications board</small>
+                    <strong>{text.allApplications}</strong>
+                    <small>{text.openApplicationsBoard}</small>
                   </span>
                 </button>
               </div>
             </div>
           </div>
           <TabButton active={tab === "webApps"} onClick={() => setTab("webApps")} icon={<Globe2 size={17} />}>
-            Web App
+            {text.webApp}
           </TabButton>
           <TabButton active={tab === "support"} onClick={() => setTab("support")} icon={<ReceiptText size={17} />}>
-            Support
+            {text.support}
           </TabButton>
         </nav>
 
         <div className="header-actions">
           <button className="button primary pill" onClick={() => setTab("download")}>
-            {siteSettings.primaryCtaLabel}
+            {localizedSiteSettings.primaryCtaLabel}
           </button>
           <a
             className="kofi-donate-link"
@@ -333,20 +656,23 @@ export function App() {
             target="_blank"
             rel="noreferrer"
             onClick={openDonationPanel}
-            title="Open the Ko-fi tip form. Brainok Store sign-in is not required."
+            title={text.kofiTitle}
           >
             <img
               height={36}
               style={{ border: 0, height: 36 }}
               src={KOFI_BUTTON_IMAGE_URL}
-              alt="Donate on Ko-fi"
+              alt={text.donateAlt}
             />
           </a>
-          <button className="icon-button" aria-label="Account" title="Account" onClick={() => setTab("account")}>
+          <button className="language-button" aria-label={text.languageToggle} title={text.languageToggle} onClick={toggleLanguage}>
+            <span aria-hidden="true">{text.languageFlag}</span>
+          </button>
+          <button className="icon-button" aria-label={text.account} title={text.account} onClick={() => setTab("account")}>
             <UserRound size={19} />
           </button>
           {user ? (
-            <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={() => void signOut(auth)}>
+            <button className="icon-button" aria-label={text.signOut} title={text.signOut} onClick={() => void signOut(auth)}>
               <LogOut size={19} />
             </button>
           ) : null}
@@ -440,13 +766,17 @@ function PricingView({
   user,
   profile,
   siteSettings,
-  onError
+  onError,
+  language,
+  text
 }: {
   apps: BrainokApp[];
   user: User | null;
   profile: UserProfile | null;
   siteSettings: SiteSettings;
   onError: (message: string | null) => void;
+  language: Language;
+  text: UiText;
 }) {
   const [selectedSupportAppId, setSelectedSupportAppId] = useState<string | null>(null);
   const supportApps = useMemo(
@@ -456,10 +786,7 @@ function PricingView({
   const selectedSupportApp = selectedSupportAppId
     ? supportApps.find((app) => app.appId === selectedSupportAppId) || null
     : null;
-  const tipPanelUrl = useMemo(
-    () => normalizeKofiTipPanelUrl(siteSettings.donationCheckoutUrl),
-    [siteSettings.donationCheckoutUrl]
-  );
+  const tipPanelUrl = KOFI_TIP_PANEL_URL;
 
   useEffect(() => {
     if (selectedSupportAppId && !selectedSupportApp) {
@@ -475,6 +802,8 @@ function PricingView({
         profile={profile}
         onBack={() => setSelectedSupportAppId(null)}
         onError={onError}
+        language={language}
+        text={text}
       />
     );
   }
@@ -482,19 +811,19 @@ function PricingView({
   return (
     <section className="support-resource-page">
       <div className="section-heading">
-        <span className="mini-label">Support</span>
-        <h2>Support</h2>
-        <p>Choose an app below to open support.</p>
+        <span className="mini-label">{text.support}</span>
+        <h2>{text.support}</h2>
+        <p>{text.supportPage.chooseApp}</p>
       </div>
 
-      <KofiTipPanel iframeUrl={tipPanelUrl} />
+      <KofiTipPanel iframeUrl={tipPanelUrl} text={text} />
 
       {supportApps.length === 0 ? (
         <article className="support-resource-card">
           <Package size={24} />
           <span>
-            <strong>No apps yet</strong>
-            <small>Published apps will appear here.</small>
+            <strong>{text.supportPage.noApps}</strong>
+            <small>{text.publishedAppsAppear}</small>
           </span>
         </article>
       ) : (
@@ -511,13 +840,13 @@ function PricingView({
                   {primaryMedia.url ? <img src={primaryMedia.url} alt="" /> : <Package size={28} />}
                 </button>
                 <div className="support-app-body">
-                  <span className="mini-label">{app.category || "Desktop app"}</span>
+                  <span className="mini-label">{app.category || text.apps.desktopApp}</span>
                   <h3>{app.name}</h3>
-                  <p>{supportTeaser(app)}</p>
+                  <p>{supportTeaser(app, text.supportPage.teaserFallback, language)}</p>
                   <div className="button-row">
                     <button className="button primary" type="button" onClick={() => setSelectedSupportAppId(app.appId)}>
                       <ReceiptText size={18} />
-                      Open support
+                      {text.supportPage.openSupport}
                     </button>
                   </div>
                 </div>
@@ -530,17 +859,17 @@ function PricingView({
   );
 }
 
-function KofiTipPanel({ iframeUrl }: { iframeUrl: string }) {
+function KofiTipPanel({ iframeUrl, text }: { iframeUrl: string; text: UiText }) {
   return (
     <section className="kofi-tip-panel" id="kofi-tip-panel" aria-labelledby="kofi-tip-panel-title">
       <div className="kofi-tip-panel-copy">
-        <span className="mini-label">Tip Panel</span>
-        <h3 id="kofi-tip-panel-title">Support Brainok Store</h3>
-        <p>Leave a display name and message with your donation. Brainok Store sign-in is not required.</p>
+        <span className="mini-label">{text.supportPage.tipPanel}</span>
+        <h3 id="kofi-tip-panel-title">{text.supportPage.supportStore}</h3>
+        <p>{text.supportPage.donationCopy}</p>
       </div>
       <a className="button primary kofi-tip-action" href={KOFI_CHECKOUT_URL} target="_blank" rel="noreferrer">
         <ExternalLink size={18} />
-        Open Ko-fi tip form
+        {text.supportPage.openKofi}
       </a>
       <iframe
         id="kofiframe"
@@ -561,22 +890,26 @@ function SupportAppDetail({
   user,
   profile,
   onBack,
-  onError
+  onError,
+  language,
+  text
 }: {
   app: BrainokApp;
   user: User | null;
   profile: UserProfile | null;
   onBack: () => void;
   onError: (message: string | null) => void;
+  language: Language;
+  text: UiText;
 }) {
   const primaryMedia = appPrimaryMedia(app);
-  const supportContent = app.supportContent || app.description;
+  const supportContent = localizedSupportContent(app, language);
 
   return (
     <section className="support-detail-page">
       <button className="button secondary compact detail-back" type="button" onClick={onBack}>
         <ArrowLeft size={16} />
-        All support
+        {text.supportPage.allSupport}
       </button>
 
       <div className="support-detail-layout">
@@ -584,20 +917,20 @@ function SupportAppDetail({
           <div className={`support-detail-media${primaryMedia.isIcon ? " icon-media" : ""}`}>
             {primaryMedia.url ? <img src={primaryMedia.url} alt="" /> : <Package size={34} />}
           </div>
-          <span className="mini-label">{app.category || "Desktop app"}</span>
-          <h2>{app.name} support</h2>
-          <p className="support-short-copy">{app.shortDescription || compactAppDescription(app)}</p>
+          <span className="mini-label">{app.category || text.apps.desktopApp}</span>
+          <h2>{app.name} {text.support}</h2>
+          <p className="support-short-copy">{localizedShortDescription(app, language) || compactAppDescription(app, text.apps.fallbackDescription, language)}</p>
           <div className="support-content-box">
-            <span className="mini-label">Support guide</span>
+            <span className="mini-label">{text.supportPage.supportGuide}</span>
             <MarkdownView
               className="markdown-view support-markdown"
               content={supportContent}
-              fallback="Add install notes, troubleshooting steps, known issues, and contact guidance for this app."
+              fallback={text.supportPage.supportFallback}
             />
           </div>
         </article>
 
-        <AppQnaPanel app={app} user={user} profile={profile} onError={onError} />
+        <AppQnaPanel app={app} user={user} profile={profile} onError={onError} language={language} text={text} />
       </div>
     </section>
   );
@@ -607,12 +940,16 @@ function AppQnaPanel({
   app,
   user,
   profile,
-  onError
+  onError,
+  language,
+  text
 }: {
   app: BrainokApp;
   user: User | null;
   profile: UserProfile | null;
   onError: (message: string | null) => void;
+  language: Language;
+  text: UiText;
 }) {
   const [questions, setQuestions] = useState<AppQuestion[]>([]);
   const [questionDraft, setQuestionDraft] = useState("");
@@ -627,9 +964,9 @@ function AppQnaPanel({
     }
 
     return watchAppQuestions(app.appId, setQuestions, (error) => {
-      onError(error instanceof Error ? error.message : "Could not load QnA.");
+      onError(error instanceof Error ? error.message : text.qna.loadFailed);
     });
-  }, [app.appId, onError, user]);
+  }, [app.appId, onError, text, user]);
 
   const sortedQuestions = useMemo(
     () => [...questions].sort((left, right) => timestampMillis(right.createdAt) - timestampMillis(left.createdAt)),
@@ -639,12 +976,12 @@ function AppQnaPanel({
   async function submitQuestion() {
     try {
       if (!user) {
-        onError("Sign in before asking a support question.");
+        onError(text.qna.signInBeforeAsk);
         return;
       }
 
       if (questionDraft.trim().length < 3) {
-        onError("Write a little more before submitting.");
+        onError(text.qna.writeMore);
         return;
       }
 
@@ -653,7 +990,7 @@ function AppQnaPanel({
       await askAppQuestion(app.appId, questionDraft);
       setQuestionDraft("");
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Could not submit question.");
+      onError(error instanceof Error ? error.message : text.qna.submitFailed);
     } finally {
       setBusyQuestionId(null);
     }
@@ -663,7 +1000,7 @@ function AppQnaPanel({
     try {
       const answer = answerDrafts[question.questionId] || "";
       if (answer.trim().length < 2) {
-        onError("Write an answer first.");
+        onError(text.qna.writeAnswer);
         return;
       }
 
@@ -672,7 +1009,7 @@ function AppQnaPanel({
       await answerAppQuestion(question.questionId, answer);
       setAnswerDrafts((currentDrafts) => ({ ...currentDrafts, [question.questionId]: "" }));
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Could not save answer.");
+      onError(error instanceof Error ? error.message : text.qna.saveFailed);
     } finally {
       setBusyQuestionId(null);
     }
@@ -681,45 +1018,45 @@ function AppQnaPanel({
   return (
     <aside className="qna-panel">
       <div>
-        <span className="mini-label">App QnA</span>
-        <h2>Questions</h2>
-        <p className="panel-copy">Users can ask app-specific questions here. Admin answers appear under each question.</p>
+        <span className="mini-label">{text.qna.label}</span>
+        <h2>{text.qna.title}</h2>
+        <p className="panel-copy">{text.qna.intro}</p>
       </div>
 
       {user ? (
         <div className="qna-compose">
           <label>
-            Ask a question
+            {text.qna.ask}
             <textarea
               value={questionDraft}
               onChange={(event) => setQuestionDraft(event.target.value)}
               rows={4}
-              placeholder="Example: How do I activate this app after the 30-day trial?"
+              placeholder={text.qna.placeholder}
             />
           </label>
           <button className="button primary full" disabled={busyQuestionId === "new"} onClick={() => void submitQuestion()}>
             <ReceiptText size={18} />
-            Submit question
+            {text.qna.submit}
           </button>
         </div>
       ) : (
-        <p className="activation-note">Sign in to ask a support question.</p>
+        <p className="activation-note">{text.qna.signInPrompt}</p>
       )}
 
       <div className="qna-list">
         {sortedQuestions.length === 0 ? (
-          <p className="panel-copy">No questions yet.</p>
+          <p className="panel-copy">{text.qna.noQuestions}</p>
         ) : (
           sortedQuestions.map((question) => (
             <article className="qna-item" key={question.questionId}>
               <div className="qna-meta">
-                <strong>{canAnswer ? question.userEmail || "User" : "User"}</strong>
-                <span>{formatTimestamp(question.createdAt)}</span>
+                <strong>{canAnswer ? question.userEmail || text.qna.user : text.qna.user}</strong>
+                <span>{formatTimestamp(question.createdAt, language, text.qna.justNow)}</span>
               </div>
               <p>{question.question}</p>
               {question.answer ? (
                 <div className="qna-answer">
-                  <strong>Admin answer</strong>
+                  <strong>{text.qna.adminAnswer}</strong>
                   <p>{question.answer}</p>
                 </div>
               ) : canAnswer ? (
@@ -731,15 +1068,15 @@ function AppQnaPanel({
                       [question.questionId]: event.target.value
                     }))}
                     rows={3}
-                    placeholder="Write an admin answer..."
+                    placeholder={text.qna.answerPlaceholder}
                   />
                   <button className="button secondary full" disabled={busyQuestionId === question.questionId} onClick={() => void submitAnswer(question)}>
                     <Save size={18} />
-                    Save answer
+                    {text.qna.saveAnswer}
                   </button>
                 </div>
               ) : (
-                <span className="qna-status">Waiting for admin answer</span>
+                <span className="qna-status">{text.qna.waiting}</span>
               )}
             </article>
           ))
@@ -762,7 +1099,9 @@ function AppsView({
   emptyPublicCopy,
   eyebrow,
   title,
-  intro
+  intro,
+  language,
+  text
 }: {
   user: User | null;
   profile: UserProfile | null;
@@ -777,6 +1116,8 @@ function AppsView({
   eyebrow: string;
   title: string;
   intro: string;
+  language: Language;
+  text: UiText;
 }) {
   const [apps, setApps] = useState<BrainokApp[]>([]);
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
@@ -854,7 +1195,7 @@ function AppsView({
   async function claimFree(app: BrainokApp) {
     try {
       if (!user) {
-        onError("Sign in before adding an app to your account.");
+        onError(text.apps.signInBeforeAdding);
         onOpenAccount();
         return;
       }
@@ -863,7 +1204,7 @@ function AppsView({
       onError(null);
       await grantFreeAppAccess(app.appId);
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Could not add app access.");
+      onError(error instanceof Error ? error.message : text.apps.addAccessFailed);
     } finally {
       setBusyAppId(null);
     }
@@ -873,11 +1214,8 @@ function AppsView({
     <>
       {appsLoadError ? (
         <section className="notice-panel">
-          <h2>App board is waiting for access</h2>
-          <p>
-            Firestore blocked the app list for this session. Sign in with your admin account,
-            then refresh this page after rules finish deploying.
-          </p>
+          <h2>{text.apps.boardWaitingTitle}</h2>
+          <p>{text.apps.boardWaitingCopy}</p>
         </section>
       ) : null}
 
@@ -888,6 +1226,8 @@ function AppsView({
           busy={busyAppId === selectedApp.appId}
           onBack={() => setSelectedAppId(null)}
           onClaimFree={() => void claimFree(selectedApp)}
+          language={language}
+          text={text}
         />
       ) : sortedApps.length === 0 ? (
         <section className="account-panel">
@@ -924,7 +1264,7 @@ function AppsView({
                   className={`app-media app-media-button${primaryMedia.isIcon ? " icon-media" : ""}`}
                   type="button"
                   onClick={() => setSelectedAppId(app.appId)}
-                  aria-label={`Open ${app.name}`}
+                  aria-label={text.apps.openApp(app.name)}
                 >
                   {primaryMedia.url ? (
                     <img src={primaryMedia.url} alt="" />
@@ -937,24 +1277,24 @@ function AppsView({
                   )}
                 </button>
                 <div className="app-card-main">
-                  <span className="mini-label">{app.category || app.visibility || "public"}</span>
+                  <span className="mini-label">{app.category || app.visibility || text.apps.publicLabel}</span>
                   <button className="app-title-button" type="button" onClick={() => setSelectedAppId(app.appId)}>
                     {app.name}
                   </button>
                   <MarkdownView
                     className="markdown-view app-description"
-                    content={app.shortDescription || compactAppDescription(app)}
-                    fallback="Desktop app access, releases, and activation numbers are managed here."
+                    content={localizedShortDescription(app, language) || compactAppDescription(app, text.apps.fallbackDescription, language)}
+                    fallback={text.apps.fallbackMarkdown}
                   />
                 </div>
 
                 <dl className="app-meta">
                   <div>
-                    <dt>Access</dt>
-                    <dd>{access ? "Active" : "30-day trial"}</dd>
+                    <dt>{text.apps.access}</dt>
+                    <dd>{access ? text.apps.active : text.apps.trial}</dd>
                   </div>
                   <div>
-                    <dt>Version</dt>
+                    <dt>{text.apps.version}</dt>
                     <dd>{app.downloads?.latestVersion || "TBD"}</dd>
                   </div>
                 </dl>
@@ -964,13 +1304,13 @@ function AppsView({
                     downloadLinks.map((downloadLink, index) => (
                       <a className={index === 0 ? "button primary" : "button secondary"} href={downloadLink.href} key={downloadLink.label}>
                         <Download size={18} />
-                        {downloadLink.label}
+                        {localizedDownloadLabel(downloadLink.kind, text)}
                       </a>
                     ))
                   ) : (
                     <button className="button secondary" disabled>
                       <Download size={18} />
-                      No build yet
+                      {text.apps.noBuildYet}
                     </button>
                   )}
                 </div>
@@ -979,59 +1319,59 @@ function AppsView({
                   {access ? (
                     <button className="button secondary" disabled>
                       <ShieldCheck size={18} />
-                      Activated
+                      {text.apps.activated}
                     </button>
                   ) : pricingMode === "free" ? (
                     <button className="button primary" disabled={busy} onClick={() => void claimFree(app)}>
                       <Plus size={18} />
-                      Add to account
+                      {text.apps.addToAccount}
                     </button>
                   ) : pricingMode === "paid" ? (
                     checkoutUrl ? (
                       <a className="button primary" href={checkoutUrl} target="_blank" rel="noreferrer">
                         <ShoppingCart size={18} />
-                        Buy access
+                        {text.apps.buyAccess}
                       </a>
                     ) : (
                       <button className="button secondary" disabled>
                         <ShoppingCart size={18} />
-                        Checkout link not set
+                        {text.apps.checkoutMissing}
                       </button>
                     )
                   ) : (
                     <button className="button secondary" disabled>
                       <KeyRound size={18} />
-                      Activate in app
+                      {text.apps.activateInApp}
                     </button>
                   )}
 
                   {releaseUrl ? (
                     <a className="button secondary" href={releaseUrl}>
                       <ExternalLink size={18} />
-                      Release
+                      {text.apps.release}
                     </a>
                   ) : null}
                   {docsUrl ? (
                     <a className="button secondary" href={docsUrl}>
                       <BookOpen size={18} />
-                      Docs
+                      {text.apps.docs}
                     </a>
                   ) : null}
                   {floatingVideoUrl ? (
                     <button className="button secondary" type="button" onClick={() => setFloatingDemoApp(app)}>
                       <PlayCircle size={18} />
-                      Demo
+                      {text.apps.demo}
                     </button>
                   ) : externalVideoUrl ? (
                     <a className="button secondary" href={externalVideoUrl} target="_blank" rel="noreferrer">
                       <PlayCircle size={18} />
-                      Demo
+                      {text.apps.demo}
                     </a>
                   ) : null}
                 </div>
                 <div className="activation-note app-card-note">
                   <KeyRound size={18} />
-                  <span>Download first. A 30-day trial starts in the app. If you received a redeem/activation code, enter it in the app to keep using it free.</span>
+                  <span>{text.apps.note}</span>
                 </div>
               </article>
               );
@@ -1045,7 +1385,7 @@ function AppsView({
           className="floating-video-backdrop"
           role="dialog"
           aria-modal="true"
-          aria-label={`${floatingDemoApp.name} floating demo video`}
+          aria-label={text.apps.floatingDemoLabel(floatingDemoApp.name)}
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
               setFloatingDemoApp(null);
@@ -1054,7 +1394,7 @@ function AppsView({
         >
           <div className="floating-video-window">
             <div className="floating-video-toolbar">
-              <strong>{floatingDemoApp.name} demo</strong>
+              <strong>{floatingDemoApp.name} {text.apps.demo}</strong>
               <div className="floating-video-actions">
                 {floatingDemoExternalUrl ? (
                   <a className="button secondary compact" href={floatingDemoExternalUrl} target="_blank" rel="noreferrer">
@@ -1062,14 +1402,14 @@ function AppsView({
                     YouTube
                   </a>
                 ) : null}
-                <button className="icon-button" type="button" aria-label="Close floating player" onClick={() => setFloatingDemoApp(null)}>
+                <button className="icon-button" type="button" aria-label={text.apps.closeFloating} onClick={() => setFloatingDemoApp(null)}>
                   <X size={18} />
                 </button>
               </div>
             </div>
             <iframe
               src={floatingDemoEmbedUrl}
-              title={`${floatingDemoApp.name} floating demo video`}
+              title={text.apps.floatingDemoLabel(floatingDemoApp.name)}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
             />
@@ -1085,13 +1425,17 @@ function AppDetailView({
   access,
   busy,
   onBack,
-  onClaimFree
+  onClaimFree,
+  language,
+  text
 }: {
   app: BrainokApp;
   access: boolean;
   busy: boolean;
   onBack: () => void;
   onClaimFree: () => void;
+  language: Language;
+  text: UiText;
 }) {
   const pricingMode = app.pricing?.mode || "invite_only";
   const downloadLinks = appDownloadLinks(app);
@@ -1124,7 +1468,7 @@ function AppDetailView({
     <section className="app-detail-page">
       <button className="button secondary compact detail-back" type="button" onClick={onBack}>
         <ArrowLeft size={16} />
-        All apps
+        {text.apps.allApps}
       </button>
 
       <div className="app-detail-hero">
@@ -1153,8 +1497,8 @@ function AppDetailView({
               <button
                 className="video-float-hit-target"
                 type="button"
-                aria-label={`Open ${app.name} demo in a floating player`}
-                title="Double-click to open a floating player"
+                aria-label={text.apps.openFloating(app.name)}
+                title={text.apps.floatingTitle}
                 onDoubleClick={() => setFloatingVideoOpen(true)}
               />
               <button
@@ -1163,7 +1507,7 @@ function AppDetailView({
                 onClick={() => setFloatingVideoOpen(true)}
               >
                 <Maximize2 size={15} />
-                Floating
+                {text.apps.floating}
               </button>
             </div>
           ) : videoUrl && isDirectVideoUrl(videoUrl) && primaryMedia.url ? (
@@ -1173,38 +1517,35 @@ function AppDetailView({
           ) : videoUrl ? (
             <div className="app-detail-video app-detail-video-link">
               <PlayCircle size={34} />
-              <strong>Demo video</strong>
-              <span>Open the saved video link in a new tab.</span>
+              <strong>{text.apps.demoVideo}</strong>
+              <span>{text.apps.openSavedVideo}</span>
               <a className="button secondary compact" href={externalVideoUrl || videoUrl} target="_blank" rel="noreferrer">
                 <ExternalLink size={16} />
-                Open demo
+                {text.apps.openDemo}
               </a>
             </div>
           ) : null}
         </div>
 
         <div className="app-detail-summary">
-          <span className="mini-label">{app.category || app.visibility || "public"}</span>
+          <span className="mini-label">{app.category || app.visibility || text.apps.publicLabel}</span>
           <h1>{app.name}</h1>
-          <p>{compactAppDescription(app)}</p>
+          <p>{localizedShortDescription(app, language) || compactAppDescription(app, text.apps.fallbackDescription, language)}</p>
 
           <dl className="app-meta detail-meta">
             <div>
-              <dt>Access</dt>
-              <dd>{access ? "Active" : "30-day trial"}</dd>
+              <dt>{text.apps.access}</dt>
+              <dd>{access ? text.apps.active : text.apps.trial}</dd>
             </div>
             <div>
-              <dt>Version</dt>
+              <dt>{text.apps.version}</dt>
               <dd>{app.downloads?.latestVersion || "TBD"}</dd>
             </div>
           </dl>
 
           <div className="activation-note">
             <KeyRound size={18} />
-            <span>
-              Install first. The app starts a 30-day trial. If you received a redeem/activation
-              code, enter it inside the app to keep using it free.
-            </span>
+            <span>{text.apps.note}</span>
           </div>
 
           <div className="download-actions detail-downloads">
@@ -1212,13 +1553,13 @@ function AppDetailView({
               downloadLinks.map((downloadLink, index) => (
                 <a className={index === 0 ? "button primary" : "button secondary"} href={downloadLink.href} key={downloadLink.label}>
                   <Download size={18} />
-                  {downloadLink.label}
+                  {localizedDownloadLabel(downloadLink.kind, text)}
                 </a>
               ))
             ) : (
               <button className="button secondary" disabled>
                 <Download size={18} />
-                No build yet
+                {text.apps.noBuildYet}
               </button>
             )}
           </div>
@@ -1227,48 +1568,48 @@ function AppDetailView({
             {access ? (
               <button className="button secondary" disabled>
                 <ShieldCheck size={18} />
-                Activated
+                {text.apps.activated}
               </button>
             ) : pricingMode === "free" ? (
               <button className="button primary" disabled={busy} onClick={onClaimFree}>
                 <Plus size={18} />
-                Add to account
+                {text.apps.addToAccount}
               </button>
             ) : pricingMode === "paid" ? (
               checkoutUrl ? (
                 <a className="button primary" href={checkoutUrl} target="_blank" rel="noreferrer">
                   <ShoppingCart size={18} />
-                  Buy access
+                  {text.apps.buyAccess}
                 </a>
               ) : (
                 <button className="button secondary" disabled>
                   <ShoppingCart size={18} />
-                  Checkout link not set
+                  {text.apps.checkoutMissing}
                 </button>
               )
             ) : (
               <button className="button secondary" disabled>
                 <KeyRound size={18} />
-                Activate in app
+                {text.apps.activateInApp}
               </button>
             )}
 
             {releaseUrl ? (
               <a className="button secondary" href={releaseUrl}>
                 <ExternalLink size={18} />
-                Release
+                {text.apps.release}
               </a>
             ) : null}
             {docsUrl ? (
               <a className="button secondary" href={docsUrl}>
                 <BookOpen size={18} />
-                Docs
+                {text.apps.docs}
               </a>
             ) : null}
             {externalVideoUrl ? (
               <a className="button secondary" href={externalVideoUrl} target="_blank" rel="noreferrer">
                 <PlayCircle size={18} />
-                Demo
+                {text.apps.demo}
               </a>
             ) : null}
           </div>
@@ -1276,11 +1617,11 @@ function AppDetailView({
       </div>
 
       <article className="app-detail-body">
-        <span className="mini-label">Application overview</span>
+        <span className="mini-label">{text.apps.overview}</span>
         <MarkdownView
           className="markdown-view app-detail-description"
-          content={app.shortDescription || compactAppDescription(app)}
-          fallback="Open the Support page for install notes, troubleshooting, and QnA."
+          content={localizedDescription(app, language) || localizedShortDescription(app, language) || compactAppDescription(app, text.apps.fallbackDescription, language)}
+          fallback={text.apps.overviewFallback}
         />
       </article>
 
@@ -1289,7 +1630,7 @@ function AppDetailView({
           className="floating-video-backdrop"
           role="dialog"
           aria-modal="true"
-          aria-label={`${app.name} floating demo video`}
+          aria-label={text.apps.floatingDemoLabel(app.name)}
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
               setFloatingVideoOpen(false);
@@ -1298,7 +1639,7 @@ function AppDetailView({
         >
           <div className="floating-video-window">
             <div className="floating-video-toolbar">
-              <strong>{app.name} demo</strong>
+              <strong>{app.name} {text.apps.demo}</strong>
               <div className="floating-video-actions">
                 {externalVideoUrl ? (
                   <a className="button secondary compact" href={externalVideoUrl} target="_blank" rel="noreferrer">
@@ -1306,14 +1647,14 @@ function AppDetailView({
                     YouTube
                   </a>
                 ) : null}
-                <button className="icon-button" type="button" aria-label="Close floating player" onClick={() => setFloatingVideoOpen(false)}>
+                <button className="icon-button" type="button" aria-label={text.apps.closeFloating} onClick={() => setFloatingVideoOpen(false)}>
                   <X size={18} />
                 </button>
               </div>
             </div>
             <iframe
               src={youtubeFloatingUrl}
-              title={`${app.name} floating demo video`}
+              title={text.apps.floatingDemoLabel(app.name)}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
             />
@@ -1438,396 +1779,16 @@ function SiteSettingsEditor({
   );
 }
 
-function AppPublisher({
-  user,
-  profile,
-  manageableApps,
-  onError
-}: {
-  user: User;
-  profile: UserProfile | null;
-  manageableApps: BrainokApp[];
-  onError: (message: string | null) => void;
-}) {
-  const [mode, setMode] = useState<"new" | "edit">(manageableApps.length > 0 ? "edit" : "new");
-  const [selectedAppId, setSelectedAppId] = useState("");
-  const [draft, setDraft] = useState<AppDraft>(emptyAppDraft);
-  const [createdInvite, setCreatedInvite] = useState<string | null>(null);
-  const [copyLabel, setCopyLabel] = useState("Copy code");
-  const [uploadTarget, setUploadTarget] = useState<ReleaseUploadTarget>("windows");
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [busy, setBusy] = useState(false);
-  const selectedApp = manageableApps.find((app) => app.appId === selectedAppId) || manageableApps[0] || null;
-  useEffect(() => {
-    if (manageableApps.length === 0) {
-      setMode("new");
-      setSelectedAppId("");
-      return;
-    }
-
-    setMode((currentMode) => currentMode === "new" ? currentMode : "edit");
-    setSelectedAppId((currentAppId) => currentAppId || manageableApps[0].appId);
-  }, [manageableApps]);
-
-  useEffect(() => {
-    if (mode === "new") {
-      setDraft(emptyAppDraft);
-      return;
-    }
-
-    if (selectedApp) {
-      setDraft(appToDraft(selectedApp));
-    }
-  }, [mode, selectedApp?.appId]);
-
-  async function saveApp() {
-    try {
-      setBusy(true);
-      onError(null);
-
-      if (!draft.name.trim()) {
-        onError("App title is required.");
-        return;
-      }
-
-      if (mode === "new") {
-        const app = await createApp(draft.name, draftToUpdate(draft));
-        setSelectedAppId(app.appId);
-        setMode("edit");
-        return;
-      }
-
-      if (!selectedApp) {
-        onError("Select an app first.");
-        return;
-      }
-
-      await updateApp(selectedApp.appId, draftToUpdate(draft));
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "Could not save app.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function createNewActivationCode() {
-    try {
-      if (!selectedApp) {
-        onError("Create or select an app first.");
-        return;
-      }
-
-      setBusy(true);
-      onError(null);
-      const activation = await createActivationCode(selectedApp.appId);
-      setCreatedInvite(activation.code);
-      setCopyLabel("Copy code");
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "Could not create activation number.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function copyInvite() {
-    if (!createdInvite) {
-      return;
-    }
-
-    await navigator.clipboard.writeText(createdInvite);
-    setCopyLabel("Copied");
-    window.setTimeout(() => setCopyLabel("Copy code"), 1400);
-  }
-
-  async function uploadFile(file: File | undefined) {
-    try {
-      if (!file) {
-        return;
-      }
-
-      if (!selectedApp) {
-        onError("Save the app first, then upload release files.");
-        return;
-      }
-
-      setBusy(true);
-      setUploadProgress(0);
-      onError(null);
-      const result = await uploadAppReleaseFile({
-        appId: selectedApp.appId,
-        ownerUid: user.uid,
-        file,
-        target: uploadTarget,
-        onProgress: setUploadProgress
-      });
-
-      setDraft((currentDraft) => attachUploadUrl(currentDraft, uploadTarget, result.url));
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "Could not upload file.");
-    } finally {
-      setBusy(false);
-      window.setTimeout(() => setUploadProgress(null), 1200);
-    }
-  }
-
-  return (
-    <section className="publisher-panel">
-      <div className="publisher-header">
-        <div>
-          <span className="mini-label">Admin publisher</span>
-          <h2>Publish or update an app</h2>
-          <p>Fill the title and description, choose access, then attach release links or upload files.</p>
-        </div>
-        <div className="mode-switch" aria-label="Publisher mode">
-          <button className={mode === "new" ? "active" : ""} onClick={() => setMode("new")}>
-            New app
-          </button>
-          <button className={mode === "edit" ? "active" : ""} disabled={manageableApps.length === 0} onClick={() => setMode("edit")}>
-            Edit app
-          </button>
-        </div>
-      </div>
-
-      {mode === "edit" && manageableApps.length > 0 ? (
-        <label>
-          App
-          <select value={selectedApp?.appId || ""} onChange={(event) => setSelectedAppId(event.target.value)}>
-            {manageableApps.map((app) => (
-              <option key={app.appId} value={app.appId}>
-                {app.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
-
-      <div className="publisher-steps">
-        <section>
-          <span className="step-badge">1</span>
-          <h3>Title and description</h3>
-          <div className="editor-grid">
-            <label>
-              App title
-              <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Brainok Neuro" />
-            </label>
-            <label>
-              Category
-              <input value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} placeholder="Research, clinic, writing..." />
-            </label>
-            <label>
-              App type
-              <select value={draft.appType} onChange={(event) => setDraft({ ...draft, appType: event.target.value as AppType })}>
-                <option value="application">Application</option>
-                <option value="web_app">Web App</option>
-              </select>
-            </label>
-            <label>
-              Display order
-              <input type="number" min="0" step="1" value={draft.sortOrder} onChange={(event) => setDraft({ ...draft, sortOrder: event.target.value })} />
-            </label>
-            <label className="wide-field">
-              Listing short description
-              <textarea
-                value={draft.shortDescription}
-                onChange={(event) => setDraft({ ...draft, shortDescription: event.target.value })}
-                rows={3}
-                placeholder="One or two short sentences for the listing page."
-              />
-            </label>
-            <label className="wide-field">
-              Listing detail Markdown
-              <textarea
-                className="large-description"
-                value={draft.description}
-                onChange={(event) => setDraft({ ...draft, description: event.target.value })}
-                rows={12}
-                placeholder={"Paste Markdown here.\n\n# What it does\n- Main feature\n- Who it is for\n\n## Notes\nYou can use headings, lists, links, and code."}
-              />
-            </label>
-            <div className="wide-field markdown-preview">
-              <span className="mini-label">Markdown preview</span>
-              <MarkdownView content={draft.description} fallback="Your formatted app description will appear here." />
-            </div>
-            <label className="wide-field">
-              Support content
-              <textarea
-                className="large-description"
-                value={draft.supportContent}
-                onChange={(event) => setDraft({ ...draft, supportContent: event.target.value })}
-                rows={12}
-                placeholder={"Paste Support Markdown here.\n\n# Install\n# Activation\n# Common problems"}
-              />
-            </label>
-            <div className="wide-field markdown-preview">
-              <span className="mini-label">Support preview</span>
-              <MarkdownView content={draft.supportContent} fallback="Support guide will appear here." />
-            </div>
-          </div>
-        </section>
-
-        <section>
-          <span className="step-badge">2</span>
-          <h3>Access and price</h3>
-          <div className="editor-grid">
-            <label>
-              Visibility
-              <select value={draft.visibility} onChange={(event) => setDraft({ ...draft, visibility: event.target.value as AppDraft["visibility"] })}>
-                <option value="public">Public board</option>
-                <option value="private">Private</option>
-              </select>
-            </label>
-            <label>
-              Access model
-              <select value={draft.pricingMode} onChange={(event) => setDraft({ ...draft, pricingMode: event.target.value as AppDraft["pricingMode"] })}>
-                <option value="invite_only">Invite only</option>
-                <option value="free">Free</option>
-                <option value="paid">Paid access</option>
-                <option value="donation">Donation only</option>
-              </select>
-            </label>
-            <label>
-              Price
-              <input type="number" min="0" step="0.01" value={draft.priceMajor} onChange={(event) => setDraft({ ...draft, priceMajor: event.target.value })} />
-            </label>
-            <label>
-              Currency
-              <input value={draft.currency} onChange={(event) => setDraft({ ...draft, currency: event.target.value.toUpperCase() })} />
-            </label>
-            <label>
-              Billing
-              <select value={draft.billingInterval} onChange={(event) => setDraft({ ...draft, billingInterval: event.target.value as AppDraft["billingInterval"] })}>
-                <option value="one_time">One-time</option>
-                <option value="monthly">Monthly</option>
-                <option value="yearly">Yearly</option>
-                <option value="pay_what_you_want">Pay what you want</option>
-              </select>
-            </label>
-            <label>
-              Latest version
-              <input value={draft.latestVersion} onChange={(event) => setDraft({ ...draft, latestVersion: event.target.value })} placeholder="0.1.0" />
-            </label>
-          </div>
-        </section>
-
-        <section>
-          <span className="step-badge">3</span>
-          <h3>Thumbnail and demo</h3>
-          <div className="media-editor">
-            <div className="media-preview">
-              {draft.thumbnailUrl ? (
-                <img src={toDisplayImageUrl(draft.thumbnailUrl) || ""} alt="" />
-              ) : draft.videoUrl && isDirectVideoUrl(draft.videoUrl) ? (
-                <video src={draft.videoUrl} muted playsInline controls />
-              ) : draft.videoUrl && youtubeEmbedUrlFrom(draft.videoUrl) ? (
-                <iframe
-                  src={youtubeEmbedUrlFrom(draft.videoUrl) || ""}
-                  title="Demo video preview"
-                  loading="lazy"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                />
-              ) : (
-                <div>
-                  {draft.videoUrl ? <PlayCircle size={30} /> : <ImageIcon size={30} />}
-                  <span>{draft.videoUrl ? "External video link is saved." : "Upload a thumbnail or demo video."}</span>
-                </div>
-              )}
-            </div>
-            <div className="editor-grid">
-              <label>
-                App icon URL
-                <input value={draft.iconUrl} onChange={(event) => setDraft({ ...draft, iconUrl: event.target.value })} placeholder="Square PNG/WebP URL" />
-              </label>
-              <label>
-                Thumbnail image URL
-                <input value={draft.thumbnailUrl} onChange={(event) => setDraft({ ...draft, thumbnailUrl: event.target.value })} placeholder="https://..." />
-              </label>
-              <label>
-                Demo video URL
-                <input value={draft.videoUrl} onChange={(event) => setDraft({ ...draft, videoUrl: event.target.value })} placeholder="https://..." />
-              </label>
-            </div>
-          </div>
-        </section>
-
-        <section>
-          <span className="step-badge">4</span>
-          <h3>Files and links</h3>
-          <div className="upload-strip">
-            <label>
-              Attach file as
-              <select value={uploadTarget} onChange={(event) => setUploadTarget(event.target.value as ReleaseUploadTarget)}>
-                <option value="icon">App icon</option>
-                <option value="thumbnail">Thumbnail image</option>
-                <option value="video">Demo video</option>
-                <option value="windows">Windows installer</option>
-                <option value="mac">Mac installer</option>
-                <option value="release">Release page</option>
-                <option value="docs">Manual or docs</option>
-              </select>
-            </label>
-            <label className={selectedApp ? "file-picker" : "file-picker disabled"}>
-              <UploadCloud size={20} />
-              {uploadProgress === null ? "Choose file" : `Uploading ${uploadProgress}%`}
-              <input disabled={!selectedApp || busy} type="file" accept={uploadAccept(uploadTarget)} onChange={(event) => void uploadFile(event.target.files?.[0])} />
-            </label>
-          </div>
-          <div className="editor-grid">
-            <label className="wide-field">
-              Lemon checkout URL
-              <input value={draft.checkoutUrl} onChange={(event) => setDraft({ ...draft, checkoutUrl: event.target.value })} placeholder="https://brainokstore.lemonsqueezy.com/checkout/..." />
-            </label>
-            <label>
-              Release page URL
-              <input value={draft.releaseUrl} onChange={(event) => setDraft({ ...draft, releaseUrl: event.target.value })} placeholder="GitHub Release or Firebase URL" />
-            </label>
-            <label>
-              Documentation URL
-              <input value={draft.docsUrl} onChange={(event) => setDraft({ ...draft, docsUrl: event.target.value })} />
-            </label>
-            <label>
-              Windows download URL
-              <input value={draft.windowsDownloadUrl} onChange={(event) => setDraft({ ...draft, windowsDownloadUrl: event.target.value })} />
-            </label>
-            <label>
-              Mac download URL
-              <input value={draft.macDownloadUrl} onChange={(event) => setDraft({ ...draft, macDownloadUrl: event.target.value })} />
-            </label>
-          </div>
-        </section>
-      </div>
-
-      <div className="publisher-actions">
-        <button className="button primary" disabled={busy || !draft.name.trim()} onClick={() => void saveApp()}>
-          <Save size={18} />
-          {mode === "new" ? "Create app" : "Save app"}
-        </button>
-        <button className="button secondary" disabled={busy || !selectedApp} onClick={() => void createNewActivationCode()}>
-          <KeyRound size={18} />
-          Create activation number
-        </button>
-        <span className="quota-note">One code activates one device. Trial is 30 days.</span>
-      </div>
-
-      {createdInvite ? (
-        <div className="invite-result compact">
-          <code className="invite-code">{createdInvite}</code>
-          <button className="button secondary" onClick={() => void copyInvite()}>
-            <Copy size={18} />
-            {copyLabel}
-          </button>
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
 function DownloadView({
   apps,
-  siteSettings
+  siteSettings,
+  language,
+  text
 }: {
   apps: BrainokApp[];
   siteSettings: SiteSettings;
+  language: Language;
+  text: UiText;
 }) {
   const downloadableApps = apps
     .filter((app) => app.status === "active")
@@ -1840,7 +1801,7 @@ function DownloadView({
           <BrandLogo className="download-logo" />
           <h2>{siteSettings.downloadTitle}</h2>
           <strong>{siteSettings.downloadSubtitle}</strong>
-          <p>No public apps are ready for download yet.</p>
+          <p>{text.download.noApps}</p>
         </div>
       </section>
     );
@@ -1851,7 +1812,7 @@ function DownloadView({
       <div className="download-catalog-header">
         <BrandLogo className="download-logo" />
         <div>
-          <span className="mini-label">Free downloads</span>
+          <span className="mini-label">{text.download.freeDownloads}</span>
           <h2>{siteSettings.downloadTitle}</h2>
           <strong>{siteSettings.downloadSubtitle}</strong>
           <p>{siteSettings.downloadBody}</p>
@@ -1869,25 +1830,25 @@ function DownloadView({
                 {primaryMedia.url ? <img src={primaryMedia.url} alt="" /> : <Package size={34} />}
               </div>
               <div className="download-app-body">
-                <span className="mini-label">{app.downloads?.latestVersion ? `Version ${app.downloads.latestVersion}` : app.category || "Desktop app"}</span>
+                <span className="mini-label">{app.downloads?.latestVersion ? `${text.apps.version} ${app.downloads.latestVersion}` : app.category || text.apps.desktopApp}</span>
                 <h3>{app.name}</h3>
-                <p>{compactAppDescription(app)}</p>
+                <p>{localizedShortDescription(app, language) || compactAppDescription(app, text.apps.fallbackDescription, language)}</p>
                 <div className="download-actions">
                   {downloadLinks.length > 0 ? (
                     downloadLinks.map((downloadLink, index) => (
                       <a className={index === 0 ? "button primary" : "button secondary"} href={downloadLink.href} key={downloadLink.label}>
                         <Download size={18} />
-                        {downloadLink.label}
+                        {localizedDownloadLabel(downloadLink.kind, text)}
                       </a>
                     ))
                   ) : (
                     <button className="button secondary" disabled>
                       <Download size={18} />
-                      Build soon
+                      {text.download.buildSoon}
                     </button>
                   )}
                 </div>
-                <p className="download-note">No credit card needed. The app starts a 30-day trial and accepts an activation number inside the app.</p>
+                <p className="download-note">{text.download.note}</p>
               </div>
             </article>
           );
@@ -1901,27 +1862,17 @@ function AccountView({
   user,
   profile,
   siteSettings,
-  onError
+  onError,
+  text
 }: {
   user: User | null;
   profile: UserProfile | null;
   siteSettings: SiteSettings;
   onError: (message: string | null) => void;
+  text: UiText;
 }) {
   const [email, setEmail] = useState(ADMIN_EMAIL);
   const [password, setPassword] = useState("");
-  const [createdInvite, setCreatedInvite] = useState<string | null>(null);
-  const [createdInviteAppName, setCreatedInviteAppName] = useState<string | null>(null);
-  const [copyLabel, setCopyLabel] = useState("Copy code");
-  const [activationCustomerEmail, setActivationCustomerEmail] = useState("");
-  const [myActivationCodes, setMyActivationCodes] = useState<ActivationCodeSummary[]>([]);
-  const [myActivationCodesLoading, setMyActivationCodesLoading] = useState(false);
-  const [copiedActivationCode, setCopiedActivationCode] = useState<string | null>(null);
-  const [sharedAccessCodeDraft, setSharedAccessCodeDraft] = useState("BRAINOK-FRIENDS-2026");
-  const [sharedAccessMaxUsers, setSharedAccessMaxUsers] = useState("0");
-  const [sharedAccessSaved, setSharedAccessSaved] = useState<string | null>(null);
-  const [accessCodeInput, setAccessCodeInput] = useState("");
-  const [accessCodeResult, setAccessCodeResult] = useState<string | null>(null);
   const [loginMode, setLoginMode] = useState<"user" | "admin">("admin");
   const [apps, setApps] = useState<BrainokApp[]>([]);
   const [newAppName, setNewAppName] = useState("");
@@ -1931,8 +1882,8 @@ function AccountView({
   const [appUploadTarget, setAppUploadTarget] = useState<ReleaseUploadTarget>("icon");
   const [appUploadProgress, setAppUploadProgress] = useState<number | null>(null);
   const [appSaveStatus, setAppSaveStatus] = useState<string | null>(null);
-  const [donationUrlDraft, setDonationUrlDraft] = useState(siteSettings.donationCheckoutUrl || DEFAULT_SITE_SETTINGS.donationCheckoutUrl);
-  const [donationUrlSaved, setDonationUrlSaved] = useState(false);
+  const [readmeLanguage, setReadmeLanguage] = useState<ReadmeLanguage>("ko");
+  const [markdownImageStatus, setMarkdownImageStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const canManageApps = isAdminProfile(profile);
   const manageableApps = sortAppsForDisplay(canManageApps ? apps : apps.filter((app) => app.ownerUid === user?.uid));
@@ -1959,41 +1910,6 @@ function AccountView({
     setAppSaveStatus(null);
   }, [selectedManagedApp?.appId]);
 
-  useEffect(() => {
-    if (!user || canManageApps) {
-      setMyActivationCodes([]);
-      return undefined;
-    }
-
-    let mounted = true;
-    setMyActivationCodesLoading(true);
-    loadMyActivationCodes()
-      .then((activationCodes) => {
-        if (mounted) {
-          setMyActivationCodes(activationCodes);
-        }
-      })
-      .catch((error) => {
-        if (mounted) {
-          onError(error instanceof Error ? error.message : "Could not load activation numbers.");
-        }
-      })
-      .finally(() => {
-        if (mounted) {
-          setMyActivationCodesLoading(false);
-        }
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, [canManageApps, onError, user]);
-
-  useEffect(() => {
-    setDonationUrlDraft(siteSettings.donationCheckoutUrl || DEFAULT_SITE_SETTINGS.donationCheckoutUrl);
-    setDonationUrlSaved(false);
-  }, [siteSettings.donationCheckoutUrl]);
-
   function selectLoginMode(mode: "user" | "admin") {
     setLoginMode(mode);
     if (mode === "admin") {
@@ -2005,11 +1921,11 @@ function AccountView({
     const signInEmail = loginMode === "admin" && !email.trim() ? ADMIN_EMAIL : email.trim();
     setEmail(signInEmail);
     if (!signInEmail) {
-      onError("Enter your email address, or use Google sign-in.");
+      onError(text.accountView.enterEmail);
       return;
     }
     if (!password) {
-      onError(loginMode === "admin" ? "Enter the admin password, or use Google admin." : "Enter your password, or use Google user.");
+      onError(loginMode === "admin" ? text.accountView.enterAdminPassword : text.accountView.enterUserPassword);
       return;
     }
 
@@ -2018,7 +1934,7 @@ function AccountView({
       onError(null);
       await signInWithEmailAndPassword(auth, signInEmail, password);
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Sign-in failed.");
+      onError(error instanceof Error ? error.message : text.accountView.signInFailed);
     } finally {
       setBusy(false);
     }
@@ -2036,10 +1952,10 @@ function AccountView({
       const credential = await signInWithPopup(auth, provider);
       if (loginMode === "admin" && credential.user.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
         await signOut(auth);
-        throw new Error(`Choose ${ADMIN_EMAIL} for Google admin login.`);
+        throw new Error(text.accountView.chooseAdmin(ADMIN_EMAIL));
       }
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Google sign-in failed.");
+      onError(error instanceof Error ? error.message : text.accountView.googleFailed);
     } finally {
       setBusy(false);
     }
@@ -2062,36 +1978,6 @@ function AccountView({
     }
   }
 
-  async function saveDonationUrl() {
-    try {
-      setBusy(true);
-      setDonationUrlSaved(false);
-      onError(null);
-      await updateSiteSettings({
-        ...siteSettings,
-        donationCheckoutUrl: donationUrlDraft.trim()
-      });
-      setDonationUrlSaved(true);
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "Could not save donation URL.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function loadMyActivationCodes() {
-    return listMyActivationCodes();
-  }
-
-  async function refreshMyActivationCodes() {
-    setMyActivationCodesLoading(true);
-    try {
-      setMyActivationCodes(await loadMyActivationCodes());
-    } finally {
-      setMyActivationCodesLoading(false);
-    }
-  }
-
   async function saveSelectedApp() {
     try {
       if (!selectedManagedApp) {
@@ -2102,6 +1988,13 @@ function AccountView({
       onError(null);
       setAppSaveStatus(null);
       await updateApp(selectedManagedApp.appId, draftToUpdate(appDraft));
+      const savedApp = await getAppFromServer(selectedManagedApp.appId);
+      if (!savedApp || !readmeFieldsPersisted(appDraft, savedApp)) {
+        const message = "Save finished, but README fields did not persist. Deploy Firebase Functions, then save again.";
+        setAppSaveStatus(null);
+        onError(message);
+        return;
+      }
       setAppSaveStatus(`Saved ${appDraft.name || selectedManagedApp.name}`);
     } catch (error) {
       onError(error instanceof Error ? error.message : "Could not save app settings.");
@@ -2178,108 +2071,73 @@ function AccountView({
     }
   }
 
-  async function createNewActivationCode() {
-    try {
-      setBusy(true);
-      onError(null);
-      const appId = selectedManagedApp?.appId;
-      if (!appId) {
-        onError("Create an app first.");
-        return;
-      }
-
-      const activation = await createActivationCode(appId, 1, activationCustomerEmail);
-      setCreatedInvite(activation.code);
-      setCreatedInviteAppName(activation.appName);
-      setCopyLabel("Copy code");
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "Could not create activation number.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveSharedAccessCode() {
-    try {
-      setBusy(true);
-      setSharedAccessSaved(null);
-      onError(null);
-      const appId = selectedManagedApp?.appId;
-      if (!appId) {
-        onError("Create an app first.");
-        return;
-      }
-
-      const result = await createSharedAccessCode(
-        appId,
-        sharedAccessCodeDraft,
-        Number(sharedAccessMaxUsers) || 0
-      );
-      setSharedAccessSaved(`${result.code} for ${result.appName}`);
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "Could not save shared access code.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function copyInvite() {
-    if (!createdInvite) {
+  async function pasteMarkdownImage(field: MarkdownDraftField, event: ClipboardEvent<HTMLTextAreaElement>) {
+    const imageFile = clipboardImageFile(event);
+    if (!imageFile) {
       return;
     }
 
-    await navigator.clipboard.writeText(createdInvite);
-    setCopyLabel("Copied");
-    window.setTimeout(() => setCopyLabel("Copy code"), 1400);
-  }
+    event.preventDefault();
+    if (!user || !selectedManagedApp) {
+      onError("Save or select an app before pasting images into README.");
+      return;
+    }
 
-  async function copyMyActivationCode(code: string) {
-    await navigator.clipboard.writeText(code);
-    setCopiedActivationCode(code);
-    window.setTimeout(() => setCopiedActivationCode(null), 1400);
-  }
+    const selectionStart = event.currentTarget.selectionStart;
+    const selectionEnd = event.currentTarget.selectionEnd;
+    const file = imageFile.name ? imageFile : new File([imageFile], `readme-image-${Date.now()}.png`, {
+      type: imageFile.type || "image/png"
+    });
 
-  async function redeemAccessCode() {
     try {
-      setBusy(true);
-      setAccessCodeResult(null);
+      setMarkdownImageStatus("Uploading pasted image...");
       onError(null);
-      const result = await redeemSharedAccessCode(accessCodeInput);
-      setAccessCodeInput("");
-      setAccessCodeResult(
-        `${result.appName}: ${result.activationCode}${result.alreadyRedeemed ? " (already assigned)" : ""}`
-      );
-      await refreshMyActivationCodes();
+      const result = await uploadAppReleaseFile({
+        appId: selectedManagedApp.appId,
+        ownerUid: user.uid,
+        file,
+        target: "docs"
+      });
+      const imageMarkdown = `\n\n![${markdownImageAlt(file.name)}](${result.url})\n\n`;
+      setAppDraft((currentDraft) => ({
+        ...currentDraft,
+        [field]: insertTextAtRange(currentDraft[field], imageMarkdown, selectionStart, selectionEnd)
+      }));
+      setMarkdownImageStatus("Image inserted into README.");
+      window.setTimeout(() => setMarkdownImageStatus(null), 1600);
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Could not redeem access code.");
-    } finally {
-      setBusy(false);
+      setMarkdownImageStatus(null);
+      onError(error instanceof Error ? error.message : "Could not upload pasted image.");
     }
   }
+
+  const readmeShortField: "shortDescription" | "shortDescriptionKo" = readmeLanguage === "ko" ? "shortDescriptionKo" : "shortDescription";
+  const readmeDescriptionField: MarkdownDraftField = readmeLanguage === "ko" ? "descriptionKo" : "description";
+  const readmeLabel = readmeLanguage === "ko" ? "Korean README" : "English README";
 
   if (!user) {
     return (
       <section className="account-panel sign-in-panel">
-        <span className="mini-label">Choose account type</span>
-        <h2>{loginMode === "admin" ? "Admin sign in" : "User sign in"}</h2>
+        <span className="mini-label">{text.accountView.chooseType}</span>
+        <h2>{loginMode === "admin" ? text.accountView.adminSignIn : text.accountView.userSignIn}</h2>
         <p className="panel-copy">
           {loginMode === "admin"
-            ? `Use this only for ${ADMIN_EMAIL}. This account publishes apps, edits the site, and creates invite codes.`
-            : "Use this for downloading apps and redeeming invite codes."}
+            ? text.accountView.adminIntro(ADMIN_EMAIL)
+            : text.accountView.userIntro}
         </p>
 
-        <div className="login-mode-switch" aria-label="Login type">
+        <div className="login-mode-switch" aria-label={text.accountView.loginType}>
           <button className={loginMode === "user" ? "active" : ""} onClick={() => selectLoginMode("user")}>
             <UserRound size={18} />
             <span>
-              <strong>User login</strong>
-              <small>Invite and download</small>
+              <strong>{text.accountView.userLogin}</strong>
+              <small>{text.accountView.userLoginSub}</small>
             </span>
           </button>
           <button className={loginMode === "admin" ? "active" : ""} onClick={() => selectLoginMode("admin")}>
             <KeyRound size={18} />
             <span>
-              <strong>Admin login</strong>
+              <strong>{text.accountView.adminLogin}</strong>
               <small>{ADMIN_EMAIL}</small>
             </span>
           </button>
@@ -2287,22 +2145,22 @@ function AccountView({
 
         <div className="form-grid">
           <label>
-            Email
+            {text.accountView.email}
             <input value={email} onChange={(event) => setEmail(event.target.value)} />
           </label>
           <label>
-            Password
+            {text.accountView.password}
             <input value={password} type="password" onChange={(event) => setPassword(event.target.value)} />
           </label>
         </div>
         <div className="button-row">
           <button className="button primary" disabled={busy} onClick={() => void signIn()}>
             <KeyRound size={18} />
-            {loginMode === "admin" ? "Sign in as admin" : "Sign in as user"}
+            {loginMode === "admin" ? text.accountView.signInAdmin : text.accountView.signInUser}
           </button>
           <button className="button secondary" disabled={busy} onClick={() => void googleSignIn()}>
             <UserRound size={18} />
-            {loginMode === "admin" ? "Google admin" : "Google user"}
+            {loginMode === "admin" ? text.accountView.googleAdmin : text.accountView.googleUser}
           </button>
         </div>
       </section>
@@ -2314,81 +2172,51 @@ function AccountView({
       {!canManageApps ? (
         <div className="account-panel">
         <div className="account-heading">
-          <h2>Account</h2>
+          <h2>{text.account}</h2>
           <span className={canManageApps ? "role-badge admin" : "role-badge user"}>
             {canManageApps ? "Admin" : "User"}
           </span>
         </div>
         {loginMode === "admin" && profile && !canManageApps ? (
           <p className="warning-text">
-            This account is signed in as a normal user. Admin tools are hidden because only {ADMIN_EMAIL} can be admin.
+            {text.accountView.normalWarning(ADMIN_EMAIL)}
           </p>
         ) : null}
         <dl>
           <div>
-            <dt>Email</dt>
+            <dt>{text.accountView.email}</dt>
             <dd>{user.email}</dd>
           </div>
           <div>
-            <dt>Access</dt>
-            <dd>{accessibleApps.length > 0 ? `${accessibleApps.length} app(s)` : profile?.accessStatus || "Loading"}</dd>
+            <dt>{text.accountView.access}</dt>
+            <dd>{accessibleApps.length > 0 ? text.accountView.appsCount(accessibleApps.length) : profile?.accessStatus || text.accountView.loading}</dd>
           </div>
           <div>
-            <dt>Role</dt>
+            <dt>{text.accountView.role}</dt>
             <dd>{isAdminProfile(profile) ? "admin" : "user"}</dd>
           </div>
           <div>
-            <dt>Device limit</dt>
+            <dt>{text.accountView.deviceLimit}</dt>
             <dd>{profile?.deviceLimit ?? "-"}</dd>
           </div>
           <div>
-            <dt>Supporter</dt>
+            <dt>{text.accountView.supporter}</dt>
             <dd>{profile?.supporterStatus || "none"}</dd>
           </div>
           <div>
-            <dt>Total donated</dt>
+            <dt>{text.accountView.totalDonated}</dt>
             <dd>{formatDonation(profile)}</dd>
           </div>
           <div>
-            <dt>Invite quota</dt>
+            <dt>{text.accountView.inviteQuota}</dt>
             <dd>{profile?.inviteQuota ?? "-"}</dd>
           </div>
           <div>
-            <dt>Managed apps</dt>
+            <dt>{text.accountView.managedApps}</dt>
             <dd>{manageableApps.length}</dd>
           </div>
         </dl>
       </div>
-      ) : null}
-
-      {canManageApps ? (
-        <div className="account-panel">
-          <h2>Donation</h2>
-          <p className="panel-copy">
-            This Ko-fi Tip Panel lets supporters leave a message and donate without signing in to
-            Brainok Store.
-          </p>
-          <div className="editor-grid">
-            <label className="wide-field">
-              Global donation URL
-              <input
-                value={donationUrlDraft}
-                onChange={(event) => {
-                  setDonationUrlDraft(event.target.value);
-                  setDonationUrlSaved(false);
-                }}
-                placeholder="https://ko-fi.com/brainok777/?hidefeed=true&widget=true&embed=true&preview=true"
-              />
-            </label>
-          </div>
-          <div className="button-row">
-            <button className="button primary" disabled={busy} onClick={() => void saveDonationUrl()}>
-              <Save size={18} />
-              Save donation URL
-            </button>
-            {donationUrlSaved ? <span className="quota-note">Saved</span> : null}
-          </div>
-        </div>
       ) : null}
 
       <div className="account-panel">
@@ -2473,42 +2301,53 @@ function AccountView({
                     Display order
                     <input type="number" min="0" step="1" value={appDraft.sortOrder} onChange={(event) => setAppDraft({ ...appDraft, sortOrder: event.target.value })} />
                   </label>
-                  <label className="wide-field">
-                    Listing short description
-                    <textarea
-                      value={appDraft.shortDescription}
-                      onChange={(event) => setAppDraft({ ...appDraft, shortDescription: event.target.value })}
-                      rows={3}
-                      placeholder="One or two short sentences for the listing page."
-                    />
-                  </label>
-                  <label className="wide-field">
-                    Listing detail Markdown
-                    <textarea
-                      className="large-description"
-                      value={appDraft.description}
-                      onChange={(event) => setAppDraft({ ...appDraft, description: event.target.value })}
-                      rows={10}
-                      placeholder="Optional longer product notes. Support page uses the Support content below first."
-                    />
-                  </label>
-                  <div className="wide-field markdown-preview">
-                    <span className="mini-label">Listing Markdown preview</span>
-                    <MarkdownView content={appDraft.description} fallback="Your formatted app description will appear here." />
-                  </div>
-                  <label className="wide-field">
-                    Support content
-                    <textarea
-                      className="large-description"
-                      value={appDraft.supportContent}
-                      onChange={(event) => setAppDraft({ ...appDraft, supportContent: event.target.value })}
-                      rows={12}
-                      placeholder={"Paste Support Markdown here.\n\nSuggested sections:\n# Install\n# Activation\n# Common problems\n# Contact"}
-                    />
-                  </label>
-                  <div className="wide-field markdown-preview">
-                    <span className="mini-label">Support preview</span>
-                    <MarkdownView content={appDraft.supportContent} fallback="Support guide will appear here." />
+                  <div className="wide-field readme-editor-panel">
+                    <div className="readme-editor-header">
+                      <div>
+                        <span className="mini-label">README language</span>
+                        <h3>{readmeLabel}</h3>
+                      </div>
+                      <div className="mode-switch compact-switch" aria-label="README language">
+                        <button className={readmeLanguage === "ko" ? "active" : ""} type="button" onClick={() => setReadmeLanguage("ko")}>
+                          🇰🇷 Korean
+                        </button>
+                        <button className={readmeLanguage === "en" ? "active" : ""} type="button" onClick={() => setReadmeLanguage("en")}>
+                          🇺🇸 English
+                        </button>
+                      </div>
+                    </div>
+
+                    <label>
+                      Listing short description
+                      <textarea
+                        value={appDraft[readmeShortField]}
+                        onChange={(event) => setAppDraft({ ...appDraft, [readmeShortField]: event.target.value })}
+                        rows={3}
+                        placeholder={readmeLanguage === "ko" ? "목록에 표시할 짧은 한국어 설명입니다." : "One or two short English sentences for the listing page."}
+                      />
+                    </label>
+
+                    <label>
+                      README Markdown
+                      <textarea
+                        className="large-description readme-textarea"
+                        value={appDraft[readmeDescriptionField]}
+                        onChange={(event) => setAppDraft({ ...appDraft, [readmeDescriptionField]: event.target.value })}
+                        onPaste={(event) => void pasteMarkdownImage(readmeDescriptionField, event)}
+                        rows={12}
+                        wrap="soft"
+                        placeholder={readmeLanguage === "ko"
+                          ? "한국어 README를 붙여넣으세요.\n\n# 설치\n# 사용 방법\n# 자주 묻는 질문\n\n이미지를 복사해 이 칸에 붙여넣으면 자동으로 업로드됩니다."
+                          : "Paste English README Markdown here.\n\n# Install\n# Usage\n# FAQ\n\nCopy an image and paste it here to upload it automatically."}
+                      />
+                    </label>
+
+                    {markdownImageStatus ? <p className="quota-note">{markdownImageStatus}</p> : null}
+
+                    <div className="markdown-preview">
+                      <span className="mini-label">{readmeLabel} preview</span>
+                      <MarkdownView content={appDraft[readmeDescriptionField]} fallback="Your formatted README will appear here." />
+                    </div>
                   </div>
                   <div className="wide-field app-media-settings">
                     <div className="app-icon-editor">
@@ -2581,34 +2420,47 @@ function AccountView({
                   </label>
                   <label>
                     Access model
-                    <select value={appDraft.pricingMode} onChange={(event) => setAppDraft({ ...appDraft, pricingMode: event.target.value as AppDraft["pricingMode"] })}>
+                    <select
+                      value={appDraft.pricingMode === "donation" ? "free" : appDraft.pricingMode}
+                      onChange={(event) => {
+                        const pricingMode = event.target.value as AppDraft["pricingMode"];
+                        setAppDraft({
+                          ...appDraft,
+                          pricingMode,
+                          ...(pricingMode === "paid" ? {} : { priceMajor: "0", checkoutUrl: "" })
+                        });
+                      }}
+                    >
                       <option value="invite_only">Invite only</option>
                       <option value="free">Free</option>
                       <option value="paid">Paid access</option>
-                      <option value="donation">Donation only</option>
                     </select>
                   </label>
-                  <label>
-                    Price
-                    <input type="number" min="0" step="0.01" value={appDraft.priceMajor} onChange={(event) => setAppDraft({ ...appDraft, priceMajor: event.target.value })} />
-                  </label>
-                  <label>
-                    Currency
-                    <input value={appDraft.currency} onChange={(event) => setAppDraft({ ...appDraft, currency: event.target.value.toUpperCase() })} />
-                  </label>
-                  <label>
-                    Billing
-                    <select value={appDraft.billingInterval} onChange={(event) => setAppDraft({ ...appDraft, billingInterval: event.target.value as AppDraft["billingInterval"] })}>
-                      <option value="one_time">One-time</option>
-                      <option value="monthly">Monthly</option>
-                      <option value="yearly">Yearly</option>
-                      <option value="pay_what_you_want">Pay what you want</option>
-                    </select>
-                  </label>
-                  <label className="wide-field">
-                    Lemon checkout URL
-                    <input value={appDraft.checkoutUrl} onChange={(event) => setAppDraft({ ...appDraft, checkoutUrl: event.target.value })} placeholder="https://brainokstore.lemonsqueezy.com/checkout/..." />
-                  </label>
+                  {appDraft.pricingMode === "paid" ? (
+                    <>
+                      <label>
+                        Price
+                        <input type="number" min="0" step="0.01" value={appDraft.priceMajor} onChange={(event) => setAppDraft({ ...appDraft, priceMajor: event.target.value })} />
+                      </label>
+                      <label>
+                        Currency
+                        <input value={appDraft.currency} onChange={(event) => setAppDraft({ ...appDraft, currency: event.target.value.toUpperCase() })} />
+                      </label>
+                      <label>
+                        Billing
+                        <select value={appDraft.billingInterval} onChange={(event) => setAppDraft({ ...appDraft, billingInterval: event.target.value as AppDraft["billingInterval"] })}>
+                          <option value="one_time">One-time</option>
+                          <option value="monthly">Monthly</option>
+                          <option value="yearly">Yearly</option>
+                          <option value="pay_what_you_want">Pay what you want</option>
+                        </select>
+                      </label>
+                      <label className="wide-field">
+                        Lemon checkout URL
+                        <input value={appDraft.checkoutUrl} onChange={(event) => setAppDraft({ ...appDraft, checkoutUrl: event.target.value })} placeholder="https://brainokstore.lemonsqueezy.com/checkout/..." />
+                      </label>
+                    </>
+                  ) : null}
                   <label>
                     Version
                     <input value={appDraft.latestVersion} onChange={(event) => setAppDraft({ ...appDraft, latestVersion: event.target.value })} placeholder="0.1.0" />
@@ -2635,136 +2487,16 @@ function AccountView({
               </>
             ) : null}
 
-            <div className="panel-separator" />
-
-            <h2>Shared access code</h2>
-            <p className="panel-copy">
-              Give this one code to friends or early testers. When they sign in and enter it,
-              the site creates their own personal activation number automatically.
-            </p>
-            <div className="editor-grid">
-              <label>
-                Shared code
-                <input
-                  value={sharedAccessCodeDraft}
-                  onChange={(event) => {
-                    setSharedAccessCodeDraft(event.target.value);
-                    setSharedAccessSaved(null);
-                  }}
-                  placeholder="BRAINOK-FRIENDS-2026"
-                />
-              </label>
-              <label>
-                Max users
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={sharedAccessMaxUsers}
-                  onChange={(event) => {
-                    setSharedAccessMaxUsers(event.target.value);
-                    setSharedAccessSaved(null);
-                  }}
-                  placeholder="0"
-                />
-              </label>
-            </div>
-            <p className="quota-note">Use 0 for unlimited early testers. Each user gets one personal activation number.</p>
-            <button className="button primary full" disabled={busy || !selectedManagedApp || !sharedAccessCodeDraft.trim()} onClick={() => void saveSharedAccessCode()}>
-              <KeyRound size={18} />
-              Save shared access code
-            </button>
-            {sharedAccessSaved ? <p className="success-text">Shared access code saved: {sharedAccessSaved}</p> : null}
-
-            <div className="panel-separator" />
-
-            <h2>One-off activation number</h2>
-            <p className="panel-copy">
-              Use this only when you want to assign a code to one specific customer email yourself.
-            </p>
-            <label>
-              Customer email
-              <input
-                value={activationCustomerEmail}
-                onChange={(event) => setActivationCustomerEmail(event.target.value)}
-                placeholder="customer@example.com"
-              />
-            </label>
-            <p className="quota-note">
-              If you enter an email, that user can sign in later and see this activation number in Account.
-            </p>
-
-            <button className="button secondary full" disabled={busy || !selectedManagedApp} onClick={() => void createNewActivationCode()}>
-              <KeyRound size={18} />
-              Create activation number
-            </button>
-            {createdInvite ? (
-              <div className="invite-result">
-                {createdInviteAppName ? <span className="mini-label">{createdInviteAppName}</span> : null}
-                <code className="invite-code">{createdInvite}</code>
-                <button className="button secondary full" onClick={() => void copyInvite()}>
-                  <Copy size={18} />
-                  {copyLabel}
-                </button>
-              </div>
-            ) : null}
-
           </>
         ) : (
           <>
             <h2>Desktop activation</h2>
             <p className="panel-copy">
-              Download the app, launch it, and enter your activation number inside the desktop app. A 30-day trial starts automatically on first launch.
+              Download the DMG, launch the app, and complete activation inside the desktop app. A 30-day trial starts automatically on first launch.
             </p>
-            <div className="access-code-box">
-              <h3>Have an access code?</h3>
-              <p className="panel-copy">
-                Enter the shared code you received. The site will create your personal activation number for this account.
-              </p>
-              <div className="inline-form">
-                <input
-                  value={accessCodeInput}
-                  onChange={(event) => {
-                    setAccessCodeInput(event.target.value);
-                    setAccessCodeResult(null);
-                  }}
-                  placeholder="BRAINOK-FRIENDS-2026"
-                />
-                <button className="button primary" disabled={busy || !accessCodeInput.trim()} onClick={() => void redeemAccessCode()}>
-                  <KeyRound size={18} />
-                  Get number
-                </button>
-              </div>
-              {accessCodeResult ? <p className="success-text">Activation number ready: {accessCodeResult}</p> : null}
-            </div>
-
-            <div className="panel-separator" />
-
-            <div className="activation-code-list">
-              {myActivationCodesLoading ? (
-                <p className="panel-copy">Loading your activation numbers...</p>
-              ) : myActivationCodes.length > 0 ? (
-                myActivationCodes.map((activationCode) => (
-                  <article className="activation-code-card" key={activationCode.code}>
-                    <div>
-                      <span className="mini-label">{activationCode.appName}</span>
-                      <code>{activationCode.code}</code>
-                      <small>
-                        {activationCode.status} · {activationCode.activationCount}/{activationCode.maxActivations} used
-                      </small>
-                    </div>
-                    <button className="button secondary compact" onClick={() => void copyMyActivationCode(activationCode.code)}>
-                      <Copy size={16} />
-                      {copiedActivationCode === activationCode.code ? "Copied" : "Copy"}
-                    </button>
-                  </article>
-                ))
-              ) : (
-                <p className="warning-text">
-                  No activation number is assigned to {user.email || "this account"} yet. You can still download and use the 30-day trial. If you received a shared access code, enter it above to create your number.
-                </p>
-              )}
-            </div>
+            <p className="activation-note">
+              Activation numbers are handled by the app itself, so this website no longer creates shared or one-off activation codes.
+            </p>
           </>
         )}
 
@@ -2898,8 +2630,11 @@ function DocsView() {
 interface AppDraft {
   name: string;
   shortDescription: string;
+  shortDescriptionKo: string;
   description: string;
+  descriptionKo: string;
   supportContent: string;
+  supportContentKo: string;
   category: string;
   appType: AppType;
   sortOrder: string;
@@ -2922,8 +2657,11 @@ interface AppDraft {
 const emptyAppDraft: AppDraft = {
   name: "",
   shortDescription: "",
+  shortDescriptionKo: "",
   description: "",
+  descriptionKo: "",
   supportContent: "",
+  supportContentKo: "",
   category: "",
   appType: "application",
   sortOrder: "0",
@@ -2947,13 +2685,16 @@ function appToDraft(app: BrainokApp): AppDraft {
   return {
     name: app.name,
     shortDescription: app.shortDescription || "",
+    shortDescriptionKo: app.shortDescriptionKo || "",
     description: app.description || "",
+    descriptionKo: app.descriptionKo || "",
     supportContent: app.supportContent || "",
+    supportContentKo: app.supportContentKo || "",
     category: app.category || "",
     appType: appKind(app),
     sortOrder: String(displaySortOrder(app, 0)),
     visibility: app.visibility || "public",
-    pricingMode: app.pricing?.mode || "invite_only",
+    pricingMode: app.pricing?.mode === "donation" ? "free" : app.pricing?.mode || "invite_only",
     priceMajor: centsToMajor(app.pricing?.priceCents || 0),
     currency: app.pricing?.currency || "USD",
     billingInterval: app.pricing?.interval || "one_time",
@@ -2973,13 +2714,16 @@ function draftToUpdate(draft: AppDraft) {
   return {
     name: draft.name,
     shortDescription: draft.shortDescription,
+    shortDescriptionKo: draft.shortDescriptionKo,
     description: draft.description,
-    supportContent: draft.supportContent,
+    descriptionKo: draft.descriptionKo,
+    supportContent: "",
+    supportContentKo: "",
     category: draft.category,
     appType: draft.appType,
     sortOrder: Math.max(0, Math.round(Number(draft.sortOrder || 0))),
     visibility: draft.visibility,
-    pricingMode: draft.pricingMode,
+    pricingMode: draft.pricingMode === "donation" ? "free" : draft.pricingMode,
     priceCents: Math.max(0, Math.round(Number(draft.priceMajor || 0) * 100)),
     currency: draft.currency || "USD",
     billingInterval: draft.billingInterval,
@@ -2993,6 +2737,19 @@ function draftToUpdate(draft: AppDraft) {
     videoUrl: draft.videoUrl,
     latestVersion: draft.latestVersion
   };
+}
+
+function readmeFieldsPersisted(draft: AppDraft, app: BrainokApp) {
+  return (
+    (app.shortDescription || "") === persistedText(draft.shortDescription, 260) &&
+    (app.shortDescriptionKo || "") === persistedText(draft.shortDescriptionKo, 260) &&
+    (app.description || "") === persistedText(draft.description, 20000) &&
+    (app.descriptionKo || "") === persistedText(draft.descriptionKo, 20000)
+  );
+}
+
+function persistedText(value: string, maxLength: number) {
+  return value.slice(0, maxLength);
 }
 
 function attachUploadUrl(draft: AppDraft, target: ReleaseUploadTarget, url: string): AppDraft {
@@ -3023,6 +2780,26 @@ function attachUploadUrl(draft: AppDraft, target: ReleaseUploadTarget, url: stri
   return { ...draft, releaseUrl: url };
 }
 
+function clipboardImageFile(event: ClipboardEvent<HTMLTextAreaElement>) {
+  const files = Array.from(event.clipboardData.files);
+  const directImage = files.find((file) => file.type.startsWith("image/"));
+  if (directImage) {
+    return directImage;
+  }
+
+  return Array.from(event.clipboardData.items)
+    .find((item) => item.kind === "file" && item.type.startsWith("image/"))
+    ?.getAsFile() || null;
+}
+
+function insertTextAtRange(value: string, insert: string, start: number, end: number) {
+  return `${value.slice(0, start)}${insert}${value.slice(end)}`;
+}
+
+function markdownImageAlt(fileName: string) {
+  return fileName.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim() || "README image";
+}
+
 function uploadAccept(target: ReleaseUploadTarget) {
   if (target === "icon" || target === "thumbnail") {
     return "image/png,image/jpeg,image/webp,image/gif";
@@ -3049,6 +2826,18 @@ function appIconUrl(app: BrainokApp) {
 
 function appKind(app: BrainokApp | null | undefined): AppType {
   return app?.appType === "web_app" ? "web_app" : "application";
+}
+
+function localizedShortDescription(app: BrainokApp, language: Language) {
+  return language === "ko" ? app.shortDescriptionKo || app.shortDescription || "" : app.shortDescription || "";
+}
+
+function localizedDescription(app: BrainokApp, language: Language) {
+  return language === "ko" ? app.descriptionKo || app.description || "" : app.description || "";
+}
+
+function localizedSupportContent(app: BrainokApp, language: Language) {
+  return localizedDescription(app, language);
 }
 
 function appTypeLabel(app: BrainokApp) {
@@ -3262,6 +3051,21 @@ function MarkdownView({
       continue;
     }
 
+    const image = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (image) {
+      const src = safeMarkdownUrl(image[2]);
+      if (src) {
+        blocks.push(
+          <figure className="markdown-image" key={`image-${index}`}>
+            <img src={src} alt={image[1] || ""} loading="lazy" />
+            {image[1] ? <figcaption>{image[1]}</figcaption> : null}
+          </figure>
+        );
+      }
+      index += 1;
+      continue;
+    }
+
     if (index + 1 < lines.length && /^(=+|-+)$/.test(lines[index + 1].trim())) {
       const Tag = lines[index + 1].trim().startsWith("=") ? "h1" : "h2";
       const headingContent = renderInlineMarkdown(trimmed, `setext-${index}`);
@@ -3375,7 +3179,7 @@ function MarkdownView({
 }
 
 function isMarkdownBlockStart(line: string) {
-  return /^(```|#{1,6}\s+|[-*]\s+|\d+\.\s+|>\s*|-{3,}$|\*{3,}$|_{3,}$)/.test(line);
+  return /^(```|!\[[^\]]*\]\([^)]+\)|#{1,6}\s+|[-*]\s+|\d+\.\s+|>\s*|-{3,}$|\*{3,}$|_{3,}$)/.test(line);
 }
 
 function looksLikePlainHeading(lines: string[], index: number) {
@@ -3427,7 +3231,7 @@ function renderInlineMarkdown(text: string, keyPrefix: string) {
     } else {
       const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       const href = link?.[2] || "";
-      const safeHref = /^https?:\/\//i.test(href) ? href : "#";
+      const safeHref = safeMarkdownUrl(href) || "#";
       nodes.push(
         <a key={`${keyPrefix}-link-${nodes.length}`} href={safeHref} target="_blank" rel="noreferrer">
           {link?.[1] || href}
@@ -3442,13 +3246,21 @@ function renderInlineMarkdown(text: string, keyPrefix: string) {
   return nodes;
 }
 
+function safeMarkdownUrl(value: string) {
+  const raw = value.trim();
+  return /^(https?:\/\/|data:image\/(?:png|jpeg|jpg|gif|webp);base64,)/i.test(raw) ? raw : "";
+}
+
 function centsToMajor(cents: number) {
   return (Math.max(0, cents) / 100).toFixed(2).replace(/\.00$/, "");
 }
 
-function compactAppDescription(app: BrainokApp) {
-  const fallback = "Install the app, use the trial, then enter a redeem code if you received one.";
-  const text = (app.shortDescription || app.description || "")
+function compactAppDescription(
+  app: BrainokApp,
+  fallback = "Install the app, use the trial, then enter a redeem code if you received one.",
+  language: Language = "en"
+) {
+  const text = (localizedShortDescription(app, language) || localizedDescription(app, language))
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/[#>*_`[\]()~-]/g, " ")
     .replace(/\s+/g, " ")
@@ -3461,15 +3273,19 @@ function compactAppDescription(app: BrainokApp) {
   return text.length > 120 ? `${text.slice(0, 117)}...` : text;
 }
 
-function supportTeaser(app: BrainokApp) {
-  const text = (app.supportContent || app.description || app.shortDescription || "")
+function supportTeaser(
+  app: BrainokApp,
+  fallback = "Open support for install notes, troubleshooting, and app-specific QnA.",
+  language: Language = "en"
+) {
+  const text = (localizedSupportContent(app, language) || localizedShortDescription(app, language))
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/[#>*_`[\]()~-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
   if (!text) {
-    return "Open support for install notes, troubleshooting, and app-specific QnA.";
+    return fallback;
   }
 
   return text.length > 140 ? `${text.slice(0, 137)}...` : text;
@@ -3496,13 +3312,13 @@ function timestampMillis(value: unknown) {
   return 0;
 }
 
-function formatTimestamp(value: unknown) {
+function formatTimestamp(value: unknown, language: Language = "en", emptyLabel = "just now") {
   const millis = timestampMillis(value);
   if (!millis) {
-    return "just now";
+    return emptyLabel;
   }
 
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(language === "ko" ? "ko-KR" : "en-US", {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -3510,22 +3326,36 @@ function formatTimestamp(value: unknown) {
   }).format(new Date(millis));
 }
 
+type DownloadLinkKind = "windows" | "mac" | "release";
+
 function appDownloadLinks(app: BrainokApp) {
-  const links: Array<{ label: string; href: string }> = [];
+  const links: Array<{ kind: DownloadLinkKind; label: string; href: string }> = [];
 
   if (app.downloads?.windowsUrl) {
-    links.push({ label: "Download Win", href: app.downloads.windowsUrl });
+    links.push({ kind: "windows", label: "Download Win", href: app.downloads.windowsUrl });
   }
 
   if (app.downloads?.macUrl) {
-    links.push({ label: "Download Mac", href: app.downloads.macUrl });
+    links.push({ kind: "mac", label: "Download Mac", href: app.downloads.macUrl });
   }
 
   if (links.length === 0 && app.downloads?.releaseUrl) {
-    links.push({ label: "Release page", href: app.downloads.releaseUrl });
+    links.push({ kind: "release", label: "Release page", href: app.downloads.releaseUrl });
   }
 
   return links;
+}
+
+function localizedDownloadLabel(kind: DownloadLinkKind, text: UiText) {
+  if (kind === "windows") {
+    return text.download.downloadWin;
+  }
+
+  if (kind === "mac") {
+    return text.download.downloadMac;
+  }
+
+  return text.download.releasePage;
 }
 
 function accessLabel(mode: string) {

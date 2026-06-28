@@ -1,4 +1,4 @@
-import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
+import { collection, doc, getDocFromServer, onSnapshot, query, where } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { db, functions, storage } from "./firebase";
@@ -140,8 +140,11 @@ export interface BrainokApp {
   appType?: AppType;
   sortOrder?: number;
   shortDescription?: string;
+  shortDescriptionKo?: string;
   description?: string;
+  descriptionKo?: string;
   supportContent?: string;
+  supportContentKo?: string;
   category?: string;
   pricing?: AppPricing;
   downloads?: AppDownloads;
@@ -151,8 +154,11 @@ export interface BrainokApp {
 export interface UpdateAppInput {
   name?: string;
   shortDescription?: string;
+  shortDescriptionKo?: string;
   description?: string;
+  descriptionKo?: string;
   supportContent?: string;
+  supportContentKo?: string;
   category?: string;
   visibility?: AppVisibility;
   appType?: AppType;
@@ -240,6 +246,11 @@ export async function createApp(name: string, input: UpdateAppInput = {}) {
 export async function updateApp(appId: string, input: UpdateAppInput) {
   const result = await httpsCallable(functions, "updateApp")({ appId, ...input });
   return result.data as { ok: true; appId: string };
+}
+
+export async function getAppFromServer(appId: string) {
+  const snapshot = await getDocFromServer(doc(db, "apps", appId));
+  return snapshot.exists() ? (snapshot.data() as BrainokApp) : null;
 }
 
 export async function askAppQuestion(appId: string, question: string) {
