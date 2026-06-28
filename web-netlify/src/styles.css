@@ -2030,17 +2030,7 @@ textarea {
   max-width: min(100%, 760px);
   height: auto;
   margin: 0 auto;
-  border: 1px solid #dce3ef;
-  border-radius: 8px;
   object-fit: contain;
-  background: #ffffff;
-}
-
-.markdown-image figcaption {
-  margin-top: 8px;
-  color: #5b6678;
-  font-size: 13px;
-  font-weight: 700;
 }
 
 .file-picker {
@@ -2255,8 +2245,7 @@ textarea {
   justify-self: start;
 }
 
-.app-detail-hero,
-.app-detail-body {
+.app-detail-hero {
   border: 1px solid #dce3ef;
   border-radius: 8px;
   background: #ffffff;

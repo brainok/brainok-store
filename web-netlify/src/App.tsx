@@ -581,7 +581,7 @@ export function App() {
     }
 
     if (tab === "account") {
-      return <AccountView user={user} profile={profile} siteSettings={localizedSiteSettings} onError={setError} text={text} />;
+      return <AccountView user={user} profile={profile} siteSettings={localizedSiteSettings} onError={setError} language={language} text={text} />;
     }
 
     return <PricingView apps={[...sortedNavApps, ...sortedWebApps]} user={user} profile={profile} siteSettings={localizedSiteSettings} onError={setError} language={language} text={text} />;
@@ -1617,7 +1617,6 @@ function AppDetailView({
       </div>
 
       <article className="app-detail-body">
-        <span className="mini-label">{text.apps.overview}</span>
         <MarkdownView
           className="markdown-view app-detail-description"
           content={localizedDescription(app, language) || localizedShortDescription(app, language) || compactAppDescription(app, text.apps.fallbackDescription, language)}
@@ -1863,12 +1862,14 @@ function AccountView({
   profile,
   siteSettings,
   onError,
+  language,
   text
 }: {
   user: User | null;
   profile: UserProfile | null;
   siteSettings: SiteSettings;
   onError: (message: string | null) => void;
+  language: Language;
   text: UiText;
 }) {
   const [email, setEmail] = useState(ADMIN_EMAIL);
@@ -1882,13 +1883,17 @@ function AccountView({
   const [appUploadTarget, setAppUploadTarget] = useState<ReleaseUploadTarget>("icon");
   const [appUploadProgress, setAppUploadProgress] = useState<number | null>(null);
   const [appSaveStatus, setAppSaveStatus] = useState<string | null>(null);
-  const [readmeLanguage, setReadmeLanguage] = useState<ReadmeLanguage>("ko");
+  const [readmeLanguage, setReadmeLanguage] = useState<ReadmeLanguage>(language);
   const [markdownImageStatus, setMarkdownImageStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const canManageApps = isAdminProfile(profile);
   const manageableApps = sortAppsForDisplay(canManageApps ? apps : apps.filter((app) => app.ownerUid === user?.uid));
   const selectedManagedApp = manageableApps.find((app) => app.appId === selectedAppId) || manageableApps[0] || null;
   const accessibleApps = Object.values(profile?.apps || {}).filter((app) => app.accessStatus === "active");
+
+  useEffect(() => {
+    setReadmeLanguage(language);
+  }, [language]);
 
   useEffect(() => {
     if (!user) {
@@ -3058,7 +3063,6 @@ function MarkdownView({
         blocks.push(
           <figure className="markdown-image" key={`image-${index}`}>
             <img src={src} alt={image[1] || ""} loading="lazy" />
-            {image[1] ? <figcaption>{image[1]}</figcaption> : null}
           </figure>
         );
       }
