@@ -174,6 +174,7 @@ const UI_TEXT = {
       placeholder: "예: 30일 체험판 이후 이 앱을 어떻게 활성화하나요?",
       submit: "질문 제출",
       signInPrompt: "지원 질문을 하려면 로그인하세요.",
+      signInCta: "로그인 / 회원가입",
       noQuestions: "아직 질문이 없습니다.",
       user: "사용자",
       adminAnswer: "관리자 답변",
@@ -317,6 +318,7 @@ const UI_TEXT = {
       placeholder: "Example: How do I activate this app after the 30-day trial?",
       submit: "Submit question",
       signInPrompt: "Sign in to ask a support question.",
+      signInCta: "Sign in / Log in",
       noQuestions: "No questions yet.",
       user: "User",
       adminAnswer: "Admin answer",
@@ -390,6 +392,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [homeResetKey, setHomeResetKey] = useState(0);
   const [appOpenRequest, setAppOpenRequest] = useState<AppOpenRequest>(null);
+  const [preferredLoginMode, setPreferredLoginMode] = useState<"user" | "admin">("admin");
   const [language, setLanguage] = useState<Language>(readPreferredLanguage);
   const text = UI_TEXT[language];
   const localizedSiteSettings = useMemo(() => language === "ko" ? {
@@ -410,6 +413,11 @@ export function App() {
     const targetApp = navApps.find((app) => app.appId === appId);
     setTab(appKind(targetApp) === "web_app" ? "webApps" : "apps");
     setAppOpenRequest({ appId, key: Date.now() });
+  }
+
+  function openUserSignIn() {
+    setPreferredLoginMode("user");
+    setTab("account");
   }
 
   function toggleLanguage() {
@@ -487,7 +495,7 @@ export function App() {
           homeResetKey={homeResetKey}
           openAppRequest={appOpenRequest}
           onError={setError}
-          onOpenAccount={() => setTab("account")}
+          onOpenAccount={openUserSignIn}
           appType="application"
           emptyTitle={text.apps.applicationsEmptyTitle}
           emptyAdminCopy={text.apps.applicationsEmptyAdminCopy}
@@ -507,7 +515,7 @@ export function App() {
           homeResetKey={homeResetKey}
           openAppRequest={appOpenRequest}
           onError={setError}
-          onOpenAccount={() => setTab("account")}
+          onOpenAccount={openUserSignIn}
           appType="web_app"
           emptyTitle={text.apps.webEmptyTitle}
           emptyAdminCopy={text.apps.webEmptyAdminCopy}
@@ -524,11 +532,11 @@ export function App() {
     }
 
     if (tab === "account") {
-      return <AccountView user={user} profile={profile} siteSettings={localizedSiteSettings} onError={setError} language={language} text={text} />;
+      return <AccountView user={user} profile={profile} siteSettings={localizedSiteSettings} onError={setError} preferredLoginMode={preferredLoginMode} language={language} text={text} />;
     }
 
-    return <PricingView apps={[...sortedNavApps, ...sortedWebApps]} user={user} profile={profile} siteSettings={localizedSiteSettings} onError={setError} language={language} text={text} />;
-  }, [appOpenRequest, homeResetKey, language, localizedSiteSettings, profile, sortedNavApps, sortedWebApps, tab, text, user]);
+    return <PricingView apps={[...sortedNavApps, ...sortedWebApps]} user={user} profile={profile} siteSettings={localizedSiteSettings} onError={setError} onOpenAccount={openUserSignIn} language={language} text={text} />;
+  }, [appOpenRequest, homeResetKey, language, localizedSiteSettings, preferredLoginMode, profile, sortedNavApps, sortedWebApps, tab, text, user]);
 
   if (!ready) {
     return <main className="page-shell">{text.loading}</main>;
@@ -692,6 +700,7 @@ function PricingView({
   profile,
   siteSettings,
   onError,
+  onOpenAccount,
   language,
   text
 }: {
@@ -700,6 +709,7 @@ function PricingView({
   profile: UserProfile | null;
   siteSettings: SiteSettings;
   onError: (message: string | null) => void;
+  onOpenAccount: () => void;
   language: Language;
   text: UiText;
 }) {
@@ -727,6 +737,7 @@ function PricingView({
         profile={profile}
         onBack={() => setSelectedSupportAppId(null)}
         onError={onError}
+        onOpenAccount={onOpenAccount}
         language={language}
         text={text}
       />
@@ -816,6 +827,7 @@ function SupportAppDetail({
   profile,
   onBack,
   onError,
+  onOpenAccount,
   language,
   text
 }: {
@@ -824,6 +836,7 @@ function SupportAppDetail({
   profile: UserProfile | null;
   onBack: () => void;
   onError: (message: string | null) => void;
+  onOpenAccount: () => void;
   language: Language;
   text: UiText;
 }) {
@@ -855,7 +868,7 @@ function SupportAppDetail({
           </div>
         </article>
 
-        <AppQnaPanel app={app} user={user} profile={profile} onError={onError} language={language} text={text} />
+        <AppQnaPanel app={app} user={user} profile={profile} onError={onError} onOpenAccount={onOpenAccount} language={language} text={text} />
       </div>
     </section>
   );
@@ -866,6 +879,7 @@ function AppQnaPanel({
   user,
   profile,
   onError,
+  onOpenAccount,
   language,
   text
 }: {
@@ -873,6 +887,7 @@ function AppQnaPanel({
   user: User | null;
   profile: UserProfile | null;
   onError: (message: string | null) => void;
+  onOpenAccount: () => void;
   language: Language;
   text: UiText;
 }) {
@@ -902,6 +917,7 @@ function AppQnaPanel({
     try {
       if (!user) {
         onError(text.qna.signInBeforeAsk);
+        onOpenAccount();
         return;
       }
 
@@ -965,7 +981,13 @@ function AppQnaPanel({
           </button>
         </div>
       ) : (
-        <p className="activation-note">{text.qna.signInPrompt}</p>
+        <div className="activation-note qna-sign-in-note">
+          <span>{text.qna.signInPrompt}</span>
+          <button className="button secondary compact" type="button" onClick={onOpenAccount}>
+            <UserRound size={17} />
+            {text.qna.signInCta}
+          </button>
+        </div>
       )}
 
       <div className="qna-list">
@@ -1787,6 +1809,7 @@ function AccountView({
   profile,
   siteSettings,
   onError,
+  preferredLoginMode,
   language,
   text
 }: {
@@ -1794,12 +1817,13 @@ function AccountView({
   profile: UserProfile | null;
   siteSettings: SiteSettings;
   onError: (message: string | null) => void;
+  preferredLoginMode: "user" | "admin";
   language: Language;
   text: UiText;
 }) {
   const [email, setEmail] = useState(ADMIN_EMAIL);
   const [password, setPassword] = useState("");
-  const [loginMode, setLoginMode] = useState<"user" | "admin">("admin");
+  const [loginMode, setLoginMode] = useState<"user" | "admin">(preferredLoginMode);
   const [apps, setApps] = useState<BrainokApp[]>([]);
   const [newAppName, setNewAppName] = useState("");
   const [newAppType, setNewAppType] = useState<AppType>("application");
@@ -1819,6 +1843,12 @@ function AccountView({
   useEffect(() => {
     setReadmeLanguage(language);
   }, [language]);
+
+  useEffect(() => {
+    if (!user) {
+      selectLoginMode(preferredLoginMode);
+    }
+  }, [preferredLoginMode, user]);
 
   useEffect(() => {
     if (!user) {

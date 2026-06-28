@@ -2168,6 +2168,15 @@ textarea {
   font-weight: 700;
 }
 
+.qna-sign-in-note {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.qna-sign-in-note .button {
+  white-space: nowrap;
+}
+
 .app-card-note {
   margin: 0;
   align-self: end;
@@ -2554,6 +2563,7 @@ dd {
 
   .resource-menu-grid,
   .download-catalog-header,
+  .qna-sign-in-note,
   .support-editor-item {
     grid-template-columns: 1fr;
   }
