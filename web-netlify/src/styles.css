@@ -2026,9 +2026,10 @@ textarea {
 
 .markdown-image img {
   display: block;
-  width: 100%;
-  max-width: 100%;
+  width: auto;
+  max-width: min(100%, 760px);
   height: auto;
+  margin: 0 auto;
   border: 1px solid #dce3ef;
   border-radius: 8px;
   object-fit: contain;
