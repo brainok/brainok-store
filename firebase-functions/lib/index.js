@@ -144,8 +144,7 @@ function htmlEscape(value) {
 async function notifyAdminOfAppQuestion({ questionId, appId, appName, userEmail, question }) {
     const smtpPassword = qnaSmtpPassword.value();
     if (!smtpPassword) {
-        console.warn("QNA_SMTP_PASSWORD is not configured; skipping QnA email notification.");
-        return;
+        throw new Error("QNA_SMTP_PASSWORD is not configured.");
     }
     const smtpUser = process.env.QNA_SMTP_USER || adminEmail;
     const smtpHost = process.env.QNA_SMTP_HOST || "smtp.gmail.com";
@@ -976,6 +975,7 @@ export const askAppQuestion = onCall({ region, secrets: [qnaSmtpPassword] }, asy
         question,
         answer: null,
         status: "open",
+        emailNotificationStatus: "pending",
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
     });
@@ -985,8 +985,19 @@ export const askAppQuestion = onCall({ region, secrets: [qnaSmtpPassword] }, asy
         appName,
         userEmail: user.email || null,
         question
-    }).catch((error) => {
+    }).then(() => questionRef.update({
+        emailNotificationStatus: "sent",
+        emailNotificationError: FieldValue.delete(),
+        emailNotificationUpdatedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+    })).catch((error) => {
         console.error("Could not send QnA email notification.", error);
+        return questionRef.update({
+            emailNotificationStatus: "failed",
+            emailNotificationError: error instanceof Error ? error.message.slice(0, 500) : "Unknown email notification error.",
+            emailNotificationUpdatedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
+        });
     });
     return { questionId: questionRef.id, appId };
 });
