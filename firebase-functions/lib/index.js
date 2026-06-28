@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
+import nodemailer from "nodemailer";
 import { FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
@@ -9,6 +10,7 @@ const db = getFirestore();
 const auth = getAuth();
 const region = process.env.FUNCTION_REGION || "asia-northeast3";
 const lemonSqueezyWebhookSecret = defineSecret("LEMONSQUEEZY_WEBHOOK_SECRET");
+const qnaSmtpPassword = defineSecret("QNA_SMTP_PASSWORD");
 const adminEmail = "brainok777@gmail.com";
 const trialLengthMs = 30 * 24 * 60 * 60 * 1000;
 const defaultSiteSettings = {
@@ -130,6 +132,63 @@ function textField(value, fallback, maxLength = 500) {
         return value.slice(0, maxLength);
     }
     return (asString(value) ?? fallback).slice(0, maxLength);
+}
+function htmlEscape(value) {
+    return value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+async function notifyAdminOfAppQuestion({ questionId, appId, appName, userEmail, question }) {
+    const smtpPassword = qnaSmtpPassword.value();
+    if (!smtpPassword) {
+        console.warn("QNA_SMTP_PASSWORD is not configured; skipping QnA email notification.");
+        return;
+    }
+    const smtpUser = process.env.QNA_SMTP_USER || adminEmail;
+    const smtpHost = process.env.QNA_SMTP_HOST || "smtp.gmail.com";
+    const smtpPort = Number(process.env.QNA_SMTP_PORT || 465);
+    const fromLabel = process.env.QNA_SMTP_FROM_NAME || "Brainok Store";
+    const safeAppName = htmlEscape(appName);
+    const safeQuestion = htmlEscape(question).replace(/\n/g, "<br>");
+    const safeUserEmail = htmlEscape(userEmail || "Unknown user");
+    const transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpPort === 465,
+        auth: {
+            user: smtpUser,
+            pass: smtpPassword
+        }
+    });
+    await transporter.sendMail({
+        from: `"${fromLabel}" <${smtpUser}>`,
+        to: adminEmail,
+        replyTo: userEmail || undefined,
+        subject: `[Brainok Store QnA] ${appName}`,
+        text: [
+            "A new app question was submitted.",
+            "",
+            `App: ${appName}`,
+            `App ID: ${appId}`,
+            `Question ID: ${questionId}`,
+            `User: ${userEmail || "Unknown user"}`,
+            "",
+            question
+        ].join("\n"),
+        html: [
+            "<p>A new app question was submitted.</p>",
+            "<ul>",
+            `<li><strong>App:</strong> ${safeAppName}</li>`,
+            `<li><strong>App ID:</strong> ${htmlEscape(appId)}</li>`,
+            `<li><strong>Question ID:</strong> ${htmlEscape(questionId)}</li>`,
+            `<li><strong>User:</strong> ${safeUserEmail}</li>`,
+            "</ul>",
+            `<p><strong>Question</strong></p><p>${safeQuestion}</p>`
+        ].join("")
+    });
 }
 function boundedSupportResources(value) {
     if (!Array.isArray(value)) {
@@ -889,7 +948,7 @@ export const updateApp = onCall({ region }, async (request) => {
     });
     return { ok: true, appId };
 });
-export const askAppQuestion = onCall({ region }, async (request) => {
+export const askAppQuestion = onCall({ region, secrets: [qnaSmtpPassword] }, async (request) => {
     const uid = requireUid(request);
     const data = (request.data || {});
     const appId = asString(data.appId);
@@ -905,12 +964,13 @@ export const askAppQuestion = onCall({ region }, async (request) => {
         throw new HttpsError("not-found", "App does not exist.");
     }
     const app = appSnap.data() || {};
+    const appName = asString(app.name) || appId;
     const user = await auth.getUser(uid);
     const questionRef = db.collection("appQuestions").doc();
     await questionRef.set({
         questionId: questionRef.id,
         appId,
-        appName: asString(app.name) || appId,
+        appName,
         userUid: uid,
         userEmail: user.email || null,
         question,
@@ -918,6 +978,15 @@ export const askAppQuestion = onCall({ region }, async (request) => {
         status: "open",
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
+    });
+    await notifyAdminOfAppQuestion({
+        questionId: questionRef.id,
+        appId,
+        appName,
+        userEmail: user.email || null,
+        question
+    }).catch((error) => {
+        console.error("Could not send QnA email notification.", error);
     });
     return { questionId: questionRef.id, appId };
 });

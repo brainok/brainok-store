@@ -23,11 +23,12 @@ Firestore is the account, invite-access, and support-status source of truth. New
    ```
 
 4. Add Firebase client config to `app-electron/.env` and `web-netlify/.env`.
-5. Add the Lemon Squeezy checkout URL to `firebase-functions/.env`.
-6. Set the webhook signing secret:
+5. Add the Lemon Squeezy checkout URL and QnA SMTP settings to `firebase-functions/.env`.
+6. Set the webhook signing secret and QnA email app password:
 
    ```bash
    npx firebase functions:secrets:set LEMONSQUEEZY_WEBHOOK_SECRET
+   npx firebase functions:secrets:set QNA_SMTP_PASSWORD
    ```
 
 7. Deploy rules and functions:

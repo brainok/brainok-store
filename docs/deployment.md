@@ -117,14 +117,20 @@ Open Chrome DevTools with `F12`, then check Console. The most common messages ar
    npx firebase functions:secrets:set LEMONSQUEEZY_WEBHOOK_SECRET
    ```
 
-9. Add `LEMONSQUEEZY_CHECKOUT_URL` to `firebase-functions/.env`.
-10. Deploy functions:
+9. Set the QnA email password secret. For Gmail, use an app password, not the account password:
+
+   ```bash
+   npx firebase functions:secrets:set QNA_SMTP_PASSWORD
+   ```
+
+10. Add `LEMONSQUEEZY_CHECKOUT_URL` and QnA SMTP settings to `firebase-functions/.env`.
+11. Deploy functions:
 
    ```bash
    npm run deploy:functions
    ```
 
-11. Seed your first invite admin account:
+12. Seed your first invite admin account:
 
    - Sign in once on the website with `brainok777@gmail.com`.
    - Open Firestore > `users/{yourUid}`.

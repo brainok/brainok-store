@@ -6,6 +6,7 @@
 - Firestore rules are deployed.
 - Storage rules are deployed.
 - `LEMONSQUEEZY_WEBHOOK_SECRET` is set.
+- `QNA_SMTP_PASSWORD` is set so new app questions email the admin.
 - Lemon Squeezy webhook receives a test event.
 - A test donation updates `/users/{uid}` to `supporterStatus: "supporter"`.
 - A refund records `supporterStatus: "refunded"` and does not change app access.
