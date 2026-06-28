@@ -1913,8 +1913,8 @@ textarea {
 
 .markdown-view {
   color: #172033;
-  font-size: 15px;
-  line-height: 1.65;
+  font-size: 14px;
+  line-height: 1.58;
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -1932,19 +1932,19 @@ textarea {
 
 .markdown-view h1 {
   margin: 4px 0 18px;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 820;
 }
 
 .markdown-view h2 {
   margin: 28px 0 14px;
-  font-size: 21px;
+  font-size: 18px;
   font-weight: 800;
 }
 
 .markdown-view h3 {
   margin: 22px 0 10px;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 780;
 }
 
@@ -1952,7 +1952,7 @@ textarea {
 .markdown-view h5,
 .markdown-view h6 {
   margin: 16px 0 8px;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 760;
 }
 
@@ -2209,21 +2209,22 @@ textarea {
   max-height: 420px;
   overflow: auto;
   color: #536174;
-  line-height: 1.65;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .app-description h1 {
-  margin-bottom: 12px;
-  font-size: 26px;
+  margin-bottom: 10px;
+  font-size: 18px;
 }
 
 .app-description h2 {
-  margin-top: 22px;
-  font-size: 21px;
+  margin-top: 18px;
+  font-size: 16px;
 }
 
 .app-description h3 {
-  font-size: 18px;
+  font-size: 15px;
 }
 
 .app-meta {
@@ -2417,7 +2418,7 @@ textarea {
 
 .app-detail-description {
   max-width: 940px;
-  font-size: 18px;
+  font-size: 14px;
 }
 
 .floating-video-backdrop {
