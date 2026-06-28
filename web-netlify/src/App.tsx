@@ -72,7 +72,6 @@ const KOFI_PAGE_URL = `https://ko-fi.com/${KOFI_ACCOUNT_SLUG}`;
 const KOFI_CHECKOUT_URL = `${KOFI_PAGE_URL}#checkoutModal`;
 const KOFI_TIP_PANEL_URL = `${KOFI_PAGE_URL}/?hidefeed=true&widget=true&embed=true&preview=true`;
 const KOFI_BUTTON_IMAGE_URL = "https://storage.ko-fi.com/cdn/kofi6.png?v=6";
-const KOFI_OVERLAY_SCRIPT_URL = "https://storage.ko-fi.com/cdn/scripts/overlay-widget.js";
 const LOCAL_APP_MEDIA: Record<string, string> = {
   "brainok-pagewheel": "/app-media/brainok-pagewheel.jpg",
   "brainok-pagewheel-afcc05": "/app-media/brainok-pagewheel.jpg",
@@ -426,50 +425,6 @@ export function App() {
   }
 
   useEffect(() => {
-    const widgetWindow = window as typeof window & {
-      kofiWidgetOverlay?: {
-        draw: (accountSlug: string, options: Record<string, string>) => void;
-      };
-    };
-
-    function drawOverlay() {
-      if (document.body.dataset.kofiOverlayReady === "true" || !widgetWindow.kofiWidgetOverlay) {
-        return;
-      }
-
-      widgetWindow.kofiWidgetOverlay.draw(KOFI_ACCOUNT_SLUG, {
-        type: "floating-chat",
-        "floating-chat.donateButton.text": "Support me",
-        "floating-chat.donateButton.background-color": "#00bfa5",
-        "floating-chat.donateButton.text-color": "#fff"
-      });
-      document.body.dataset.kofiOverlayReady = "true";
-    }
-
-    const existingScript = document.getElementById("kofi-overlay-widget-script") as HTMLScriptElement | null;
-    if (existingScript) {
-      if (existingScript.dataset.loaded === "true") {
-        drawOverlay();
-        return undefined;
-      }
-
-      existingScript.addEventListener("load", drawOverlay);
-      return () => existingScript.removeEventListener("load", drawOverlay);
-    }
-
-    const script = document.createElement("script");
-    script.id = "kofi-overlay-widget-script";
-    script.src = KOFI_OVERLAY_SCRIPT_URL;
-    script.async = true;
-    script.addEventListener("load", () => {
-      script.dataset.loaded = "true";
-      drawOverlay();
-    });
-    document.body.appendChild(script);
-    return undefined;
-  }, []);
-
-  useEffect(() => {
     try {
       localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
     } catch {
@@ -545,9 +500,7 @@ export function App() {
           emptyTitle={text.apps.applicationsEmptyTitle}
           emptyAdminCopy={text.apps.applicationsEmptyAdminCopy}
           emptyPublicCopy={text.apps.applicationsEmptyPublicCopy}
-          eyebrow={text.apps.applicationsEyebrow}
           title={text.apps.applicationsTitle}
-          intro={text.apps.applicationsIntro}
           language={language}
           text={text}
         />
@@ -567,9 +520,7 @@ export function App() {
           emptyTitle={text.apps.webEmptyTitle}
           emptyAdminCopy={text.apps.webEmptyAdminCopy}
           emptyPublicCopy={text.apps.webEmptyPublicCopy}
-          eyebrow={text.apps.webEyebrow}
           title={text.apps.webTitle}
-          intro={text.apps.webIntro}
           language={language}
           text={text}
         />
@@ -1097,9 +1048,7 @@ function AppsView({
   emptyTitle,
   emptyAdminCopy,
   emptyPublicCopy,
-  eyebrow,
   title,
-  intro,
   language,
   text
 }: {
@@ -1113,9 +1062,7 @@ function AppsView({
   emptyTitle: string;
   emptyAdminCopy: string;
   emptyPublicCopy: string;
-  eyebrow: string;
   title: string;
-  intro: string;
   language: Language;
   text: UiText;
 }) {
@@ -1240,7 +1187,6 @@ function AppsView({
         <section className="app-rail-section" aria-labelledby="app-rail-title">
           <div className="section-heading">
             <h2 id="app-rail-title">{title}</h2>
-            <p>{intro}</p>
           </div>
 
           <div className="app-board" role="list">
