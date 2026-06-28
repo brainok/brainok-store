@@ -46,7 +46,6 @@ import {
   askAppQuestion,
   createApp,
   ensureUserProfile,
-  grantFreeAppAccess,
   getAppFromServer,
   updateSiteSettings,
   updateApp,
@@ -61,6 +60,7 @@ import {
 
 type Tab = "apps" | "webApps" | "support" | "download" | "account";
 type AppOpenRequest = { appId: string; key: number } | null;
+type SupportOpenRequest = { appId: string; key: number } | null;
 type Language = "ko" | "en";
 type ReadmeLanguage = "en" | "ko";
 type MarkdownDraftField = "description" | "descriptionKo";
@@ -114,8 +114,6 @@ const UI_TEXT = {
       webIntro: "브라우저에서 사용하는 도구를 다운로드 앱과 분리해 빠르게 찾을 수 있습니다.",
       boardWaitingTitle: "앱 목록 접근을 기다리는 중",
       boardWaitingCopy: "Firestore가 이 세션의 앱 목록을 막았습니다. 관리자 계정으로 로그인한 뒤 규칙 배포가 끝나면 새로고침하세요.",
-      signInBeforeAdding: "앱을 계정에 추가하려면 먼저 로그인하세요.",
-      addAccessFailed: "앱 접근 권한을 추가하지 못했습니다.",
       openApp: (name: string) => `${name} 열기`,
       fallbackDescription: "앱을 설치하고 체험판을 사용한 뒤, 받은 코드가 있으면 입력하세요.",
       fallbackMarkdown: "데스크톱 앱 접근 권한, 릴리스, 활성화 번호를 여기에서 관리합니다.",
@@ -125,7 +123,7 @@ const UI_TEXT = {
       version: "버전",
       noBuildYet: "빌드 없음",
       activated: "활성화됨",
-      addToAccount: "계정에 추가",
+      supportRequest: "지원 요청",
       buyAccess: "구매",
       checkoutMissing: "결제 링크 없음",
       activateInApp: "앱에서 활성화",
@@ -148,7 +146,7 @@ const UI_TEXT = {
       publicLabel: "공개"
     },
     supportPage: {
-      chooseApp: "아래 앱을 선택해 지원 페이지를 여세요.",
+      chooseApp: "앱 카드에서 지원 요청을 선택하면 앱별 지원 페이지가 열립니다.",
       noApps: "앱이 아직 없습니다",
       openSupport: "지원 열기",
       tipPanel: "후원 패널",
@@ -258,8 +256,6 @@ const UI_TEXT = {
       webIntro: "Web apps are listed separately from downloadable applications, so visitors can find browser-based tools quickly.",
       boardWaitingTitle: "App board is waiting for access",
       boardWaitingCopy: "Firestore blocked the app list for this session. Sign in with your admin account, then refresh this page after rules finish deploying.",
-      signInBeforeAdding: "Sign in before adding an app to your account.",
-      addAccessFailed: "Could not add app access.",
       openApp: (name: string) => `Open ${name}`,
       fallbackDescription: "Install the app, use the trial, then enter a redeem code if you received one.",
       fallbackMarkdown: "Desktop app access, releases, and activation numbers are managed here.",
@@ -269,7 +265,7 @@ const UI_TEXT = {
       version: "Version",
       noBuildYet: "No build yet",
       activated: "Activated",
-      addToAccount: "Add to account",
+      supportRequest: "Support request",
       buyAccess: "Buy access",
       checkoutMissing: "Checkout link not set",
       activateInApp: "Activate in app",
@@ -292,7 +288,7 @@ const UI_TEXT = {
       publicLabel: "public"
     },
     supportPage: {
-      chooseApp: "Choose an app below to open support.",
+      chooseApp: "Use Support request on an app card to open app-specific support.",
       noApps: "No apps yet",
       openSupport: "Open support",
       tipPanel: "Tip Panel",
@@ -375,11 +371,7 @@ const UI_TEXT = {
 type UiText = (typeof UI_TEXT)[Language];
 
 function readPreferredLanguage(): Language {
-  try {
-    return localStorage.getItem(LANGUAGE_STORAGE_KEY) === "en" ? "en" : "ko";
-  } catch {
-    return "ko";
-  }
+  return "ko";
 }
 
 export function App() {
@@ -392,6 +384,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [homeResetKey, setHomeResetKey] = useState(0);
   const [appOpenRequest, setAppOpenRequest] = useState<AppOpenRequest>(null);
+  const [supportOpenRequest, setSupportOpenRequest] = useState<SupportOpenRequest>(null);
   const [preferredLoginMode, setPreferredLoginMode] = useState<"user" | "admin">("admin");
   const [language, setLanguage] = useState<Language>(readPreferredLanguage);
   const text = UI_TEXT[language];
@@ -418,6 +411,11 @@ export function App() {
   function openUserSignIn() {
     setPreferredLoginMode("user");
     setTab("account");
+  }
+
+  function openSupportRequest(appId: string) {
+    setTab("support");
+    setSupportOpenRequest({ appId, key: Date.now() });
   }
 
   function toggleLanguage() {
@@ -495,7 +493,7 @@ export function App() {
           homeResetKey={homeResetKey}
           openAppRequest={appOpenRequest}
           onError={setError}
-          onOpenAccount={openUserSignIn}
+          onOpenSupportRequest={openSupportRequest}
           appType="application"
           emptyTitle={text.apps.applicationsEmptyTitle}
           emptyAdminCopy={text.apps.applicationsEmptyAdminCopy}
@@ -515,7 +513,7 @@ export function App() {
           homeResetKey={homeResetKey}
           openAppRequest={appOpenRequest}
           onError={setError}
-          onOpenAccount={openUserSignIn}
+          onOpenSupportRequest={openSupportRequest}
           appType="web_app"
           emptyTitle={text.apps.webEmptyTitle}
           emptyAdminCopy={text.apps.webEmptyAdminCopy}
@@ -535,8 +533,8 @@ export function App() {
       return <AccountView user={user} profile={profile} siteSettings={localizedSiteSettings} onError={setError} preferredLoginMode={preferredLoginMode} language={language} text={text} />;
     }
 
-    return <PricingView apps={[...sortedNavApps, ...sortedWebApps]} user={user} profile={profile} siteSettings={localizedSiteSettings} onError={setError} onOpenAccount={openUserSignIn} language={language} text={text} />;
-  }, [appOpenRequest, homeResetKey, language, localizedSiteSettings, preferredLoginMode, profile, sortedNavApps, sortedWebApps, tab, text, user]);
+    return <PricingView apps={[...sortedNavApps, ...sortedWebApps]} user={user} profile={profile} siteSettings={localizedSiteSettings} onError={setError} onOpenAccount={openUserSignIn} openSupportRequest={supportOpenRequest} language={language} text={text} />;
+  }, [appOpenRequest, homeResetKey, language, localizedSiteSettings, preferredLoginMode, profile, sortedNavApps, sortedWebApps, supportOpenRequest, tab, text, user]);
 
   if (!ready) {
     return <main className="page-shell">{text.loading}</main>;
@@ -701,6 +699,7 @@ function PricingView({
   siteSettings,
   onError,
   onOpenAccount,
+  openSupportRequest,
   language,
   text
 }: {
@@ -710,6 +709,7 @@ function PricingView({
   siteSettings: SiteSettings;
   onError: (message: string | null) => void;
   onOpenAccount: () => void;
+  openSupportRequest: SupportOpenRequest;
   language: Language;
   text: UiText;
 }) {
@@ -728,6 +728,12 @@ function PricingView({
       setSelectedSupportAppId(null);
     }
   }, [selectedSupportApp, selectedSupportAppId]);
+
+  useEffect(() => {
+    if (openSupportRequest?.appId) {
+      setSelectedSupportAppId(openSupportRequest.appId);
+    }
+  }, [openSupportRequest?.key]);
 
   if (selectedSupportApp) {
     return (
@@ -762,35 +768,7 @@ function PricingView({
             <small>{text.publishedAppsAppear}</small>
           </span>
         </article>
-      ) : (
-        <div className="support-app-board">
-          {supportApps.map((app) => {
-            const primaryMedia = appPrimaryMedia(app);
-            return (
-              <article className="support-app-card" key={app.appId}>
-                <button
-                  className={`support-app-thumb support-app-thumb-button${primaryMedia.isIcon ? " icon-media" : ""}`}
-                  type="button"
-                  onClick={() => setSelectedSupportAppId(app.appId)}
-                >
-                  {primaryMedia.url ? <img src={primaryMedia.url} alt="" /> : <Package size={28} />}
-                </button>
-                <div className="support-app-body">
-                  <span className="mini-label">{app.category || text.apps.desktopApp}</span>
-                  <h3>{app.name}</h3>
-                  <p>{supportTeaser(app, text.supportPage.teaserFallback, language)}</p>
-                  <div className="button-row">
-                    <button className="button primary" type="button" onClick={() => setSelectedSupportAppId(app.appId)}>
-                      <ReceiptText size={18} />
-                      {text.supportPage.openSupport}
-                    </button>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -1039,7 +1017,7 @@ function AppsView({
   homeResetKey,
   openAppRequest,
   onError,
-  onOpenAccount,
+  onOpenSupportRequest,
   appType,
   emptyTitle,
   emptyAdminCopy,
@@ -1053,7 +1031,7 @@ function AppsView({
   homeResetKey: number;
   openAppRequest: AppOpenRequest;
   onError: (message: string | null) => void;
-  onOpenAccount: () => void;
+  onOpenSupportRequest: (appId: string) => void;
   appType: AppType;
   emptyTitle: string;
   emptyAdminCopy: string;
@@ -1064,7 +1042,6 @@ function AppsView({
 }) {
   const [apps, setApps] = useState<BrainokApp[]>([]);
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
-  const [busyAppId, setBusyAppId] = useState<string | null>(null);
   const [appsLoadError, setAppsLoadError] = useState<string | null>(null);
   const [floatingDemoApp, setFloatingDemoApp] = useState<BrainokApp | null>(null);
 
@@ -1135,24 +1112,6 @@ function AppsView({
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [floatingDemoApp]);
 
-  async function claimFree(app: BrainokApp) {
-    try {
-      if (!user) {
-        onError(text.apps.signInBeforeAdding);
-        onOpenAccount();
-        return;
-      }
-
-      setBusyAppId(app.appId);
-      onError(null);
-      await grantFreeAppAccess(app.appId);
-    } catch (error) {
-      onError(error instanceof Error ? error.message : text.apps.addAccessFailed);
-    } finally {
-      setBusyAppId(null);
-    }
-  }
-
   return (
     <>
       {appsLoadError ? (
@@ -1166,9 +1125,8 @@ function AppsView({
         <AppDetailView
           app={selectedApp}
           access={profile?.apps?.[selectedApp.appId]?.accessStatus === "active"}
-          busy={busyAppId === selectedApp.appId}
           onBack={() => setSelectedAppId(null)}
-          onClaimFree={() => void claimFree(selectedApp)}
+          onOpenSupportRequest={() => onOpenSupportRequest(selectedApp.appId)}
           language={language}
           text={text}
         />
@@ -1197,7 +1155,6 @@ function AppsView({
               const videoUrl = app.media?.videoUrl || null;
               const externalVideoUrl = externalVideoUrlFrom(videoUrl);
               const floatingVideoUrl = youtubeEmbedUrlFrom(videoUrl, "player");
-              const busy = busyAppId === app.appId;
               const checkoutUrl = app.pricing?.checkoutUrl || null;
 
               return (
@@ -1258,16 +1215,18 @@ function AppsView({
                 </div>
 
                 <div className="button-row">
+                  <button className="button primary" type="button" onClick={() => onOpenSupportRequest(app.appId)}>
+                    <ReceiptText size={18} />
+                    {text.apps.supportRequest}
+                  </button>
+
                   {access ? (
                     <button className="button secondary" disabled>
                       <ShieldCheck size={18} />
                       {text.apps.activated}
                     </button>
                   ) : pricingMode === "free" ? (
-                    <button className="button primary" disabled={busy} onClick={() => void claimFree(app)}>
-                      <Plus size={18} />
-                      {text.apps.addToAccount}
-                    </button>
+                    null
                   ) : pricingMode === "paid" ? (
                     checkoutUrl ? (
                       <a className="button primary" href={checkoutUrl} target="_blank" rel="noreferrer">
@@ -1367,17 +1326,15 @@ function AppsView({
 function AppDetailView({
   app,
   access,
-  busy,
   onBack,
-  onClaimFree,
+  onOpenSupportRequest,
   language,
   text
 }: {
   app: BrainokApp;
   access: boolean;
-  busy: boolean;
   onBack: () => void;
-  onClaimFree: () => void;
+  onOpenSupportRequest: () => void;
   language: Language;
   text: UiText;
 }) {
@@ -1512,16 +1469,18 @@ function AppDetailView({
           </div>
 
           <div className="button-row">
+            <button className="button primary" type="button" onClick={onOpenSupportRequest}>
+              <ReceiptText size={18} />
+              {text.apps.supportRequest}
+            </button>
+
             {access ? (
               <button className="button secondary" disabled>
                 <ShieldCheck size={18} />
                 {text.apps.activated}
               </button>
             ) : pricingMode === "free" ? (
-              <button className="button primary" disabled={busy} onClick={onClaimFree}>
-                <Plus size={18} />
-                {text.apps.addToAccount}
-              </button>
+              null
             ) : pricingMode === "paid" ? (
               checkoutUrl ? (
                 <a className="button primary" href={checkoutUrl} target="_blank" rel="noreferrer">
