@@ -1239,7 +1239,6 @@ function AppsView({
       ) : (
         <section className="app-rail-section" aria-labelledby="app-rail-title">
           <div className="section-heading">
-            <span className="mini-label">{eyebrow}</span>
             <h2 id="app-rail-title">{title}</h2>
             <p>{intro}</p>
           </div>
