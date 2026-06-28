@@ -71,7 +71,6 @@ const KOFI_ACCOUNT_SLUG = "brainok777";
 const KOFI_PAGE_URL = `https://ko-fi.com/${KOFI_ACCOUNT_SLUG}`;
 const KOFI_CHECKOUT_URL = `${KOFI_PAGE_URL}#checkoutModal`;
 const KOFI_TIP_PANEL_URL = `${KOFI_PAGE_URL}/?hidefeed=true&widget=true&embed=true&preview=true`;
-const KOFI_BUTTON_IMAGE_URL = "https://storage.ko-fi.com/cdn/kofi6.png?v=6";
 const LOCAL_APP_MEDIA: Record<string, string> = {
   "brainok-pagewheel": "/app-media/brainok-pagewheel.jpg",
   "brainok-pagewheel-afcc05": "/app-media/brainok-pagewheel.jpg",
@@ -413,13 +412,6 @@ export function App() {
     setAppOpenRequest({ appId, key: Date.now() });
   }
 
-  function openDonationPanel() {
-    setTab("support");
-    window.setTimeout(() => {
-      document.getElementById("kofi-tip-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 0);
-  }
-
   function toggleLanguage() {
     setLanguage((currentLanguage) => currentLanguage === "ko" ? "en" : "ko");
   }
@@ -598,24 +590,6 @@ export function App() {
         </nav>
 
         <div className="header-actions">
-          <button className="button primary pill" onClick={() => setTab("download")}>
-            {localizedSiteSettings.primaryCtaLabel}
-          </button>
-          <a
-            className="kofi-donate-link"
-            href={KOFI_CHECKOUT_URL}
-            target="_blank"
-            rel="noreferrer"
-            onClick={openDonationPanel}
-            title={text.kofiTitle}
-          >
-            <img
-              height={36}
-              style={{ border: 0, height: 36 }}
-              src={KOFI_BUTTON_IMAGE_URL}
-              alt={text.donateAlt}
-            />
-          </a>
           <button className="language-button" aria-label={text.languageToggle} title={text.languageToggle} onClick={toggleLanguage}>
             <span aria-hidden="true">{text.languageFlag}</span>
           </button>
