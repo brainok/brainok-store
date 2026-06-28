@@ -1165,6 +1165,7 @@ function AppsView({
 
           <div className="app-board" role="list">
             {sortedApps.map((app) => {
+              const isWebApp = appKind(app) === "web_app";
               const access = profile?.apps?.[app.appId]?.accessStatus === "active";
               const pricingMode = app.pricing?.mode || "invite_only";
               const downloadLinks = appDownloadLinks(app);
@@ -1210,7 +1211,7 @@ function AppsView({
                 <dl className="app-meta">
                   <div>
                     <dt>{text.apps.access}</dt>
-                    <dd>{access ? text.apps.active : text.apps.trial}</dd>
+                    <dd>{access || isWebApp ? text.apps.active : text.apps.trial}</dd>
                   </div>
                   <div>
                     <dt>{text.apps.version}</dt>
@@ -1288,10 +1289,12 @@ function AppsView({
                     </a>
                   ) : null}
                 </div>
-                <div className="activation-note app-card-note">
-                  <KeyRound size={18} />
-                  <span>{text.apps.note}</span>
-                </div>
+                {!isWebApp ? (
+                  <div className="activation-note app-card-note">
+                    <KeyRound size={18} />
+                    <span>{text.apps.note}</span>
+                  </div>
+                ) : null}
               </article>
               );
             })}
@@ -1356,6 +1359,7 @@ function AppDetailView({
   language: Language;
   text: UiText;
 }) {
+  const isWebApp = appKind(app) === "web_app";
   const pricingMode = app.pricing?.mode || "invite_only";
   const downloadLinks = appDownloadLinks(app);
   const releaseUrl = app.downloads?.releaseUrl || null;
@@ -1454,7 +1458,7 @@ function AppDetailView({
           <dl className="app-meta detail-meta">
             <div>
               <dt>{text.apps.access}</dt>
-              <dd>{access ? text.apps.active : text.apps.trial}</dd>
+              <dd>{access || isWebApp ? text.apps.active : text.apps.trial}</dd>
             </div>
             <div>
               <dt>{text.apps.version}</dt>
@@ -1462,10 +1466,12 @@ function AppDetailView({
             </div>
           </dl>
 
-          <div className="activation-note">
-            <KeyRound size={18} />
-            <span>{text.apps.note}</span>
-          </div>
+          {!isWebApp ? (
+            <div className="activation-note">
+              <KeyRound size={18} />
+              <span>{text.apps.note}</span>
+            </div>
+          ) : null}
 
           <div className="download-actions detail-downloads">
             {downloadLinks.length > 0 ? (
