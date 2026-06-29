@@ -1572,28 +1572,9 @@ textarea {
 
 .app-board {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(360px, 430px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  padding: 2px 2px 18px;
-  scroll-padding-inline: 2px;
-  scroll-snap-type: x proximity;
-}
-
-.app-board::-webkit-scrollbar {
-  height: 10px;
-}
-
-.app-board::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: #cbd5e1;
-}
-
-.app-board::-webkit-scrollbar-track {
-  border-radius: 999px;
-  background: #eef2f7;
+  padding: 2px;
 }
 
 .publisher-panel {
@@ -2066,7 +2047,6 @@ textarea {
   display: grid;
   align-content: space-between;
   gap: 18px;
-  scroll-snap-align: start;
   border: 1px solid #dce3ef;
   border-radius: 8px;
   background: white;
@@ -2498,6 +2478,12 @@ dd {
   color: #9a3412;
 }
 
+@media (max-width: 1120px) {
+  .app-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 860px) {
   .site-header,
   .intro-band,
@@ -2605,7 +2591,7 @@ dd {
   }
 
   .app-board {
-    grid-auto-columns: minmax(280px, 88vw);
+    grid-template-columns: 1fr;
   }
 
   .download-actions {
