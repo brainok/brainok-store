@@ -73,7 +73,7 @@ type Language = "ko" | "en";
 type ReadmeLanguage = "en" | "ko";
 type MarkdownDraftField = "description" | "descriptionKo";
 
-const BRAND_LOGO_SRC = "/sig-brain-store-logo.png?v=4";
+const BRAND_LOGO_SRC = "/Sigbrain%20store.png?v=6";
 const SUBSCRIPTION_REQUEST_EMAIL = "brainok777@gmail.com";
 const LOCAL_APP_MEDIA: Record<string, string> = {
   "brainok-pagewheel": "/app-media/brainok-pagewheel.jpg",
