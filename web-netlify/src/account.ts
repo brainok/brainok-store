@@ -16,10 +16,6 @@ export interface SiteSettings {
   downloadTitle: string;
   downloadSubtitle: string;
   downloadBody: string;
-  donationTitle: string;
-  donationDescription: string;
-  donationSuggested: string;
-  donationCheckoutUrl: string;
   supportResources: SupportResource[];
 }
 
@@ -36,17 +32,12 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   heroEyebrow: "Trial-first desktop software",
   heroTitle: "Useful desktop tools, released like real products.",
   heroDescription:
-    "Publish apps with thumbnails, demos, installers, and activation numbers in one place. Every app can start with a 30-day trial.",
+    "Download free, use a full 30-day trial, then unlock every Brainok app with one Brainok license.",
   primaryCtaLabel: "Free Download",
   secondaryCtaLabel: "View Apps",
   downloadTitle: "Download Brainok Store",
-  downloadSubtitle: "No credit card needed",
-  downloadBody: "Choose the installer for your operating system. The desktop app starts a 30-day trial and accepts an activation number inside the app.",
-  donationTitle: "Donation",
-  donationDescription:
-    "Donations are optional. They support development, but they do not replace invite access or paid app access.",
-  donationSuggested: "Suggested donation: $9.99",
-  donationCheckoutUrl: "https://ko-fi.com/brainok777/?hidefeed=true&widget=true&embed=true&preview=true",
+  downloadSubtitle: "Free download. No account required.",
+  downloadBody: "Choose the installer for your operating system. Each desktop app starts a 30-day trial and accepts one universal Brainok license inside the app.",
   supportResources: [
     {
       id: "tutorials",
@@ -62,8 +53,8 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
     },
     {
       id: "software-keys",
-      title: "Software Keys",
-      description: "Find your activation key",
+      title: "Brainok License",
+      description: "Use one license across Brainok apps",
       url: ""
     }
   ]
@@ -78,10 +69,6 @@ export interface UserProfile {
   accessStatus?: "pending" | "active" | "revoked";
   inviteQuota: number;
   deviceLimit: number;
-  supporterStatus?: "none" | "supporter" | "refunded";
-  donationCount?: number;
-  donationTotalCents?: number;
-  donationCurrency?: string;
   apps?: Record<string, AppAccess>;
 }
 
@@ -95,7 +82,7 @@ export interface AppAccess {
 
 export type AppVisibility = "public" | "private";
 export type AppType = "application" | "web_app";
-export type AppPricingMode = "invite_only" | "free" | "paid" | "donation";
+export type AppPricingMode = "invite_only" | "free" | "paid";
 export type AppBillingInterval = "one_time" | "monthly" | "yearly" | "pay_what_you_want";
 
 export interface AppPricing {
@@ -128,6 +115,31 @@ export interface ActivationCodeSummary {
   maxActivations: number;
   activationCount: number;
   createdAt: string | null;
+}
+
+export type BrainokLicensePlan = "personal" | "pro" | "lab" | "friend";
+
+export interface LicenseActivationSummary {
+  activationId: string;
+  deviceId: string;
+  deviceName: string;
+  appId?: string | null;
+  appName?: string | null;
+  status: string;
+  activatedAt: string | null;
+}
+
+export interface LicenseSummary {
+  licenseId: string;
+  licenseCode: string;
+  email: string | null;
+  plan: BrainokLicensePlan;
+  status: string;
+  maxDevices: number;
+  activationCount: number;
+  issuedAt: string | null;
+  createdAt: string | null;
+  activations: LicenseActivationSummary[];
 }
 
 export interface BrainokApp {
@@ -287,6 +299,31 @@ export async function createActivationCode(appId: string, maxActivations = 1, as
 export async function listMyActivationCodes() {
   const result = await httpsCallable(functions, "listMyActivationCodes")({});
   return (result.data as { activationCodes: ActivationCodeSummary[] }).activationCodes;
+}
+
+export async function createLicense(input: {
+  email?: string;
+  plan: BrainokLicensePlan;
+  licenseCode?: string;
+  maxDevices?: number;
+}) {
+  const result = await httpsCallable(functions, "createLicense")(input);
+  return result.data as LicenseSummary;
+}
+
+export async function listLicenses(search = "") {
+  const result = await httpsCallable(functions, "listLicenses")({ search });
+  return (result.data as { licenses: LicenseSummary[] }).licenses;
+}
+
+export async function disableLicense(licenseCode: string) {
+  const result = await httpsCallable(functions, "disableLicense")({ licenseCode });
+  return result.data as { ok: true };
+}
+
+export async function resetLicenseDevice(activationId: string) {
+  const result = await httpsCallable(functions, "resetLicenseDevice")({ activationId });
+  return result.data as { ok: true; activationId: string };
 }
 
 export async function createSharedAccessCode(appId: string, code: string, maxRedemptions = 0) {

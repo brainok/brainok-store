@@ -25,7 +25,9 @@ import {
   PlayCircle,
   Plus,
   ReceiptText,
+  RotateCcw,
   Save,
+  Search,
   ShieldCheck,
   ShoppingCart,
   UploadCloud,
@@ -37,16 +39,22 @@ import {
   BrainokApp,
   ADMIN_EMAIL,
   AppType,
+  BrainokLicensePlan,
   AppQuestion,
   DEFAULT_SITE_SETTINGS,
+  LicenseSummary,
   SiteSettings,
   SupportResource,
   UserProfile,
   answerAppQuestion,
   askAppQuestion,
   createApp,
+  createLicense,
+  disableLicense,
   ensureUserProfile,
   getAppFromServer,
+  listLicenses,
+  resetLicenseDevice,
   updateSiteSettings,
   updateApp,
   uploadAppReleaseFile,
@@ -58,19 +66,15 @@ import {
   watchSiteSettings
 } from "./account";
 
-type Tab = "apps" | "webApps" | "support" | "download" | "account";
+type Tab = "apps" | "webApps" | "subscription" | "download" | "account";
 type AppOpenRequest = { appId: string; key: number } | null;
 type SupportOpenRequest = { appId: string; key: number } | null;
 type Language = "ko" | "en";
 type ReadmeLanguage = "en" | "ko";
 type MarkdownDraftField = "description" | "descriptionKo";
 
-const BRAND_NAME = "Brainok Store";
-const BRAND_LOGO_SRC = "/brainok-store-logo.png";
-const KOFI_ACCOUNT_SLUG = "brainok777";
-const KOFI_PAGE_URL = `https://ko-fi.com/${KOFI_ACCOUNT_SLUG}`;
-const KOFI_CHECKOUT_URL = `${KOFI_PAGE_URL}#checkoutModal`;
-const KOFI_TIP_PANEL_URL = `${KOFI_PAGE_URL}/?hidefeed=true&widget=true&embed=true&preview=true`;
+const BRAND_LOGO_SRC = "/sig-brain-store-logo.png";
+const SUBSCRIPTION_REQUEST_EMAIL = "brainok777@gmail.com";
 const LOCAL_APP_MEDIA: Record<string, string> = {
   "brainok-pagewheel": "/app-media/brainok-pagewheel.jpg",
   "brainok-pagewheel-afcc05": "/app-media/brainok-pagewheel.jpg",
@@ -88,13 +92,12 @@ const UI_TEXT = {
     applications: "응용 프로그램",
     application: "응용 프로그램",
     webApp: "웹 앱",
+    subscription: "라이선스",
     support: "지원",
     account: "계정",
     signOut: "로그아웃",
     languageToggle: "English",
     languageFlag: "🇺🇸",
-    kofiTitle: "Ko-fi 후원 폼 열기. Brainok Store 로그인은 필요하지 않습니다.",
-    donateAlt: "Ko-fi에서 후원",
     noPublicApplications: "공개된 응용 프로그램이 아직 없습니다",
     publishedAppsAppear: "게시된 앱이 여기에 표시됩니다",
     allApplications: "전체 응용 프로그램",
@@ -105,7 +108,7 @@ const UI_TEXT = {
       applicationsEmptyPublicCopy: "공개된 응용 프로그램이 아직 없습니다. 관리자 계정으로 로그인해 게시할 수 있습니다.",
       applicationsEyebrow: "응용 프로그램",
       applicationsTitle: "응용 프로그램 선택",
-      applicationsIntro: "앱은 아래로 이어지는 카드 목록으로 정리됩니다. Windows/Mac 설치 파일, 30일 체험판, 활성화 번호를 앱별로 관리할 수 있습니다.",
+      applicationsIntro: "앱은 아래로 이어지는 카드 목록으로 정리됩니다. Windows/Mac 설치 파일, 30일 체험판, 범용 Brainok 라이선스를 함께 운영할 수 있습니다.",
       webEmptyTitle: "웹 앱",
       webEmptyAdminCopy: "웹 앱이 아직 없습니다. 앱을 만들고 종류를 Web App으로 설정하세요.",
       webEmptyPublicCopy: "공개된 웹 앱이 아직 없습니다.",
@@ -116,7 +119,7 @@ const UI_TEXT = {
       boardWaitingCopy: "Firestore가 이 세션의 앱 목록을 막았습니다. 관리자 계정으로 로그인한 뒤 규칙 배포가 끝나면 새로고침하세요.",
       openApp: (name: string) => `${name} 열기`,
       fallbackDescription: "앱을 설치하고 체험판을 사용한 뒤, 받은 코드가 있으면 입력하세요.",
-      fallbackMarkdown: "데스크톱 앱 접근 권한, 릴리스, 활성화 번호를 여기에서 관리합니다.",
+      fallbackMarkdown: "데스크톱 앱 접근 권한, 릴리스, Brainok 라이선스 안내를 여기에서 관리합니다.",
       access: "접근",
       active: "활성",
       trial: "30일 체험판",
@@ -130,7 +133,7 @@ const UI_TEXT = {
       release: "릴리스",
       docs: "문서",
       demo: "데모",
-      note: "먼저 다운로드하세요. 앱을 실행하면 30일 체험판이 시작됩니다. 교환/활성화 코드를 받았다면 앱 안에서 입력해 계속 무료로 사용할 수 있습니다.",
+      note: "무료 다운로드. 계정은 필요 없습니다. 앱을 실행하면 30일 체험판이 시작되고, 이후 하나의 Brainok 라이선스로 계속 사용할 수 있습니다.",
       allApps: "전체 앱",
       floating: "크게 보기",
       openFloating: (name: string) => `${name} 데모를 떠 있는 플레이어로 열기`,
@@ -149,10 +152,6 @@ const UI_TEXT = {
       chooseApp: "앱 카드에서 지원 요청을 선택하면 앱별 지원 페이지가 열립니다.",
       noApps: "앱이 아직 없습니다",
       openSupport: "지원 열기",
-      tipPanel: "후원 패널",
-      supportStore: "Brainok Store 후원",
-      donationCopy: "후원할 때 표시 이름과 메시지를 남길 수 있습니다. Brainok Store 로그인은 필요하지 않습니다.",
-      openKofi: "Ko-fi 후원 폼 열기",
       allSupport: "전체 지원",
       supportGuide: "지원 안내",
       supportFallback: "이 앱의 설치 방법, 문제 해결, 알려진 문제, 연락 방법을 추가하세요.",
@@ -185,10 +184,44 @@ const UI_TEXT = {
       noApps: "다운로드 가능한 공개 앱이 아직 없습니다.",
       freeDownloads: "무료 다운로드",
       buildSoon: "준비 중",
-      note: "신용카드는 필요 없습니다. 앱을 실행하면 30일 체험판이 시작되고, 앱 안에서 활성화 번호를 입력할 수 있습니다.",
+      note: "무료 다운로드. 계정은 필요 없습니다. 앱을 실행하면 30일 체험판이 시작되고, 이후 앱 안에서 Brainok 라이선스를 입력할 수 있습니다.",
       downloadWin: "Windows 다운로드",
       downloadMac: "Mac 다운로드",
       releasePage: "릴리스 페이지"
+    },
+    subscriptionPage: {
+      eyebrow: "Brainok 라이선스",
+      title: "하나의 라이선스. 모든 Brainok 앱.",
+      intro: "Brainok 앱은 누구나 무료로 다운로드하고 30일 동안 모든 기능을 체험할 수 있습니다. 체험 기간이 끝나면 하나의 Brainok 라이선스로 현재 앱과 앞으로 출시될 Brainok 앱을 계속 사용할 수 있습니다.",
+      primaryCta: "Brainok 라이선스 받기",
+      freeTitle: "무료 다운로드",
+      freeBullets: ["계정 필요 없음", "30일 전체 기능 체험", "원하는 앱을 바로 다운로드"],
+      oneTitle: "하나의 라이선스",
+      oneBullets: ["모든 Brainok 앱을 하나로 잠금 해제", "한 번 활성화", "계속 사용"],
+      anywhereTitle: "어디서나 사용",
+      anywhereBullets: ["최대 3대 Mac에서 사용", "활성화 후 오프라인 사용 가능"],
+      plansTitle: "라이선스 선택",
+      personalTitle: "Personal License",
+      personalPrice: "Mac 3대",
+      personalCopy: "개인 사용자를 위한 기본 라이선스입니다.",
+      personalCta: "라이선스 요청",
+      proTitle: "Pro License",
+      proPrice: "Mac 5대",
+      proCopy: "여러 Mac을 오가며 쓰는 사용자에게 적합합니다.",
+      proCta: "라이선스 요청",
+      labTitle: "Lab License",
+      labPrice: "Mac 20대 이상",
+      labCopy: "연구실, 진료실, 기관처럼 여러 컴퓨터에서 함께 사용할 때 적합합니다.",
+      labCta: "문의하기",
+      formTitle: "Brainok 라이선스 받기",
+      formIntro: "필요한 라이선스를 알려 주세요. 확인 후 다음 절차를 안내해 드립니다.",
+      formName: "이름",
+      formEmail: "이메일",
+      formPlan: "라이선스",
+      formDevices: "Mac 대수",
+      formMessage: "메시지",
+      formCancel: "취소",
+      formSubmit: "요청 보내기"
     },
     accountView: {
       chooseType: "계정 유형 선택",
@@ -216,8 +249,6 @@ const UI_TEXT = {
       access: "접근",
       role: "역할",
       deviceLimit: "기기 제한",
-      supporter: "후원 상태",
-      totalDonated: "총 후원",
       inviteQuota: "초대 한도",
       managedApps: "관리 앱",
       loading: "불러오는 중",
@@ -230,13 +261,12 @@ const UI_TEXT = {
     applications: "Applications",
     application: "Application",
     webApp: "Web App",
+    subscription: "License",
     support: "Support",
     account: "Account",
     signOut: "Sign out",
     languageToggle: "한국어",
     languageFlag: "🇰🇷",
-    kofiTitle: "Open the Ko-fi tip form. Brainok Store sign-in is not required.",
-    donateAlt: "Donate on Ko-fi",
     noPublicApplications: "No public applications yet",
     publishedAppsAppear: "Published apps will appear here",
     allApplications: "All applications",
@@ -247,7 +277,7 @@ const UI_TEXT = {
       applicationsEmptyPublicCopy: "No public applications yet. Sign in with your admin account to publish one.",
       applicationsEyebrow: "Applications",
       applicationsTitle: "Choose an application",
-      applicationsIntro: "Applications are listed as a vertical card grid. Each app can have separate Windows and Mac installers, a 30-day trial, and activation/redeem codes.",
+      applicationsIntro: "Applications are listed as a vertical card grid. Each app can have separate Windows and Mac installers, a 30-day trial, and one universal Brainok license.",
       webEmptyTitle: "Web App",
       webEmptyAdminCopy: "No web apps yet. Create one and set its type to Web App.",
       webEmptyPublicCopy: "No public web apps yet.",
@@ -258,7 +288,7 @@ const UI_TEXT = {
       boardWaitingCopy: "Firestore blocked the app list for this session. Sign in with your admin account, then refresh this page after rules finish deploying.",
       openApp: (name: string) => `Open ${name}`,
       fallbackDescription: "Install the app, use the trial, then enter a redeem code if you received one.",
-      fallbackMarkdown: "Desktop app access, releases, and activation numbers are managed here.",
+      fallbackMarkdown: "Desktop app access, releases, and Brainok license guidance are managed here.",
       access: "Access",
       active: "Active",
       trial: "30-day trial",
@@ -272,7 +302,7 @@ const UI_TEXT = {
       release: "Release",
       docs: "Docs",
       demo: "Demo",
-      note: "Download first. A 30-day trial starts in the app. If you received a redeem/activation code, enter it in the app to keep using it free.",
+      note: "Download free. No account required. A 30-day trial starts in the app, then one Brainok license unlocks continued use.",
       allApps: "All apps",
       floating: "Floating",
       openFloating: (name: string) => `Open ${name} demo in a floating player`,
@@ -291,10 +321,6 @@ const UI_TEXT = {
       chooseApp: "Use Support request on an app card to open app-specific support.",
       noApps: "No apps yet",
       openSupport: "Open support",
-      tipPanel: "Tip Panel",
-      supportStore: "Support Brainok Store",
-      donationCopy: "Leave a display name and message with your donation. Brainok Store sign-in is not required.",
-      openKofi: "Open Ko-fi tip form",
       allSupport: "All support",
       supportGuide: "Support guide",
       supportFallback: "Add install notes, troubleshooting steps, known issues, and contact guidance for this app.",
@@ -327,10 +353,44 @@ const UI_TEXT = {
       noApps: "No public apps are ready for download yet.",
       freeDownloads: "Free downloads",
       buildSoon: "Build soon",
-      note: "No credit card needed. The app starts a 30-day trial and accepts an activation number inside the app.",
+      note: "Download free. No account required. The app starts a 30-day trial and accepts a Brainok license inside the app.",
       downloadWin: "Download Win",
       downloadMac: "Download Mac",
       releasePage: "Release page"
+    },
+    subscriptionPage: {
+      eyebrow: "Brainok License",
+      title: "One License. Every Brainok App.",
+      intro: "Download any Brainok app for free and enjoy a full 30-day trial. When you're ready, activate a single Brainok License to unlock all current and future Brainok applications.",
+      primaryCta: "Get Brainok License",
+      freeTitle: "Free Download",
+      freeBullets: ["No account required", "30-day trial", "Download any app instantly"],
+      oneTitle: "One License",
+      oneBullets: ["One license unlocks every Brainok app", "Activate once", "Use forever"],
+      anywhereTitle: "Use Anywhere",
+      anywhereBullets: ["Available on up to 3 devices", "Works offline after activation"],
+      plansTitle: "Choose Your Plan",
+      personalTitle: "Personal License",
+      personalPrice: "3 Macs",
+      personalCopy: "Ideal for personal use.",
+      personalCta: "Request License",
+      proTitle: "Pro License",
+      proPrice: "5 Macs",
+      proCopy: "For power users.",
+      proCta: "Request License",
+      labTitle: "Lab License",
+      labPrice: "20+ Macs",
+      labCopy: "For research labs and organizations.",
+      labCta: "Contact Us",
+      formTitle: "Get Brainok License",
+      formIntro: "Tell us which license you need. We will reply with the next steps.",
+      formName: "Name",
+      formEmail: "Email",
+      formPlan: "Plan",
+      formDevices: "Macs",
+      formMessage: "Message",
+      formCancel: "Cancel",
+      formSubmit: "Send Request"
     },
     accountView: {
       chooseType: "Choose account type",
@@ -358,8 +418,6 @@ const UI_TEXT = {
       access: "Access",
       role: "Role",
       deviceLimit: "Device limit",
-      supporter: "Supporter",
-      totalDonated: "Total donated",
       inviteQuota: "Invite quota",
       managedApps: "Managed apps",
       loading: "Loading",
@@ -392,8 +450,8 @@ export function App() {
     ...siteSettings,
     primaryCtaLabel: "무료 다운로드",
     downloadTitle: "Brainok Store 다운로드",
-    downloadSubtitle: "신용카드 없이 시작",
-    downloadBody: "운영체제에 맞는 설치 파일을 선택하세요. 데스크톱 앱은 30일 체험판으로 시작하고 앱 안에서 활성화 번호를 입력할 수 있습니다."
+    downloadSubtitle: "무료 다운로드. 계정 필요 없음.",
+    downloadBody: "운영체제에 맞는 설치 파일을 선택하세요. 데스크톱 앱은 30일 체험판으로 시작하고 앱 안에서 Brainok 라이선스를 입력할 수 있습니다."
   } : siteSettings, [language, siteSettings]);
 
   function goHome() {
@@ -414,7 +472,7 @@ export function App() {
   }
 
   function openSupportRequest(appId: string) {
-    setTab("support");
+    setTab("subscription");
     setSupportOpenRequest({ appId, key: Date.now() });
   }
 
@@ -533,7 +591,7 @@ export function App() {
       return <AccountView user={user} profile={profile} siteSettings={localizedSiteSettings} onError={setError} preferredLoginMode={preferredLoginMode} language={language} text={text} />;
     }
 
-    return <PricingView apps={[...sortedNavApps, ...sortedWebApps]} user={user} profile={profile} siteSettings={localizedSiteSettings} onError={setError} onOpenAccount={openUserSignIn} openSupportRequest={supportOpenRequest} language={language} text={text} />;
+    return <SubscriptionView apps={[...sortedNavApps, ...sortedWebApps]} user={user} profile={profile} onError={setError} onOpenAccount={openUserSignIn} openSupportRequest={supportOpenRequest} language={language} text={text} />;
   }, [appOpenRequest, homeResetKey, language, localizedSiteSettings, preferredLoginMode, profile, sortedNavApps, sortedWebApps, supportOpenRequest, tab, text, user]);
 
   if (!ready) {
@@ -545,7 +603,6 @@ export function App() {
       <header className="site-header">
         <button className="brand" type="button" onClick={goHome}>
           <BrandLogo className="brand-mark" />
-          <strong>{BRAND_NAME}</strong>
         </button>
 
         <nav className="tabs" aria-label={text.navLabel}>
@@ -590,8 +647,8 @@ export function App() {
           <TabButton active={tab === "webApps"} onClick={() => setTab("webApps")} icon={<Globe2 size={17} />}>
             {text.webApp}
           </TabButton>
-          <TabButton active={tab === "support"} onClick={() => setTab("support")} icon={<ReceiptText size={17} />}>
-            {text.support}
+          <TabButton active={tab === "subscription"} onClick={() => setTab("subscription")} icon={<ReceiptText size={17} />}>
+            {text.subscription}
           </TabButton>
         </nav>
 
@@ -634,69 +691,10 @@ function MenuAppIcon({ app }: { app: BrainokApp }) {
   return <Package size={22} />;
 }
 
-function SupportResourceMenuItem({
-  resource,
-  onFallback
-}: {
-  resource: SupportResource;
-  onFallback: () => void;
-}) {
-  const content = (
-    <>
-      <ReceiptText size={22} />
-      <span>
-        <strong>{resource.title}</strong>
-        <small>{resource.description}</small>
-      </span>
-    </>
-  );
-
-  if (resource.url) {
-    return (
-      <a className="resource-menu-item" href={resource.url}>
-        {content}
-      </a>
-    );
-  }
-
-  return (
-    <button className="resource-menu-item" onClick={onFallback}>
-      {content}
-    </button>
-  );
-}
-
-function normalizeKofiTipPanelUrl(donationUrl: string | undefined) {
-  const rawUrl = donationUrl?.trim() || KOFI_PAGE_URL;
-
-  try {
-    const url = new URL(rawUrl);
-    if (!url.hostname.endsWith("ko-fi.com")) {
-      return KOFI_TIP_PANEL_URL;
-    }
-
-    const accountSlug = url.pathname.split("/").filter(Boolean)[0];
-    if (accountSlug && accountSlug !== KOFI_ACCOUNT_SLUG) {
-      return KOFI_TIP_PANEL_URL;
-    }
-
-    url.hash = "";
-    url.pathname = `/${KOFI_ACCOUNT_SLUG}/`;
-    url.searchParams.set("hidefeed", "true");
-    url.searchParams.set("widget", "true");
-    url.searchParams.set("embed", "true");
-    url.searchParams.set("preview", "true");
-    return url.toString();
-  } catch {
-    return KOFI_TIP_PANEL_URL;
-  }
-}
-
-function PricingView({
+function SubscriptionView({
   apps,
   user,
   profile,
-  siteSettings,
   onError,
   onOpenAccount,
   openSupportRequest,
@@ -706,7 +704,6 @@ function PricingView({
   apps: BrainokApp[];
   user: User | null;
   profile: UserProfile | null;
-  siteSettings: SiteSettings;
   onError: (message: string | null) => void;
   onOpenAccount: () => void;
   openSupportRequest: SupportOpenRequest;
@@ -714,6 +711,7 @@ function PricingView({
   text: UiText;
 }) {
   const [selectedSupportAppId, setSelectedSupportAppId] = useState<string | null>(null);
+  const [requestPlan, setRequestPlan] = useState<string | null>(null);
   const supportApps = useMemo(
     () => sortAppsForDisplay(apps.filter((app) => app.status === "active")),
     [apps]
@@ -721,7 +719,6 @@ function PricingView({
   const selectedSupportApp = selectedSupportAppId
     ? supportApps.find((app) => app.appId === selectedSupportAppId) || null
     : null;
-  const tipPanelUrl = KOFI_TIP_PANEL_URL;
 
   useEffect(() => {
     if (selectedSupportAppId && !selectedSupportApp) {
@@ -751,51 +748,176 @@ function PricingView({
   }
 
   return (
-    <section className="support-resource-page">
+    <section className="subscription-page">
       <div className="section-heading">
-        <span className="mini-label">{text.support}</span>
-        <h2>{text.support}</h2>
-        <p>{text.supportPage.chooseApp}</p>
+        <span className="mini-label">{text.subscriptionPage.eyebrow}</span>
+        <h2>{text.subscriptionPage.title}</h2>
+        <p>{text.subscriptionPage.intro}</p>
+        <button className="button primary large" type="button" onClick={() => setRequestPlan(text.subscriptionPage.personalTitle)}>
+          <KeyRound size={18} />
+          {text.subscriptionPage.primaryCta}
+        </button>
       </div>
 
-      <KofiTipPanel iframeUrl={tipPanelUrl} text={text} />
+      <div className="subscription-flow">
+        <LicenseFeatureCard icon={<Download size={22} />} title={text.subscriptionPage.freeTitle} bullets={text.subscriptionPage.freeBullets} />
+        <LicenseFeatureCard icon={<KeyRound size={22} />} title={text.subscriptionPage.oneTitle} bullets={text.subscriptionPage.oneBullets} />
+        <LicenseFeatureCard icon={<ShieldCheck size={22} />} title={text.subscriptionPage.anywhereTitle} bullets={text.subscriptionPage.anywhereBullets} />
+      </div>
 
-      {supportApps.length === 0 ? (
-        <article className="support-resource-card">
-          <Package size={24} />
-          <span>
-            <strong>{text.supportPage.noApps}</strong>
-            <small>{text.publishedAppsAppear}</small>
-          </span>
-        </article>
+      <section className="subscription-plans" aria-labelledby="subscription-plans-title">
+        <h3 id="subscription-plans-title">{text.subscriptionPage.plansTitle}</h3>
+        <div className="subscription-plan-grid">
+          <PlanCard
+            title={text.subscriptionPage.personalTitle}
+            price={text.subscriptionPage.personalPrice}
+            features={[text.subscriptionPage.personalCopy]}
+            action={(
+              <button className="button primary full" type="button" onClick={() => setRequestPlan(text.subscriptionPage.personalTitle)}>
+                {text.subscriptionPage.personalCta}
+              </button>
+            )}
+          />
+          <PlanCard
+            title={text.subscriptionPage.proTitle}
+            price={text.subscriptionPage.proPrice}
+            features={[text.subscriptionPage.proCopy]}
+            action={(
+              <button className="button primary full" type="button" onClick={() => setRequestPlan(text.subscriptionPage.proTitle)}>
+                {text.subscriptionPage.proCta}
+              </button>
+            )}
+          />
+          <PlanCard
+            title={text.subscriptionPage.labTitle}
+            price={text.subscriptionPage.labPrice}
+            features={[text.subscriptionPage.labCopy]}
+            action={(
+              <button className="button secondary full" type="button" onClick={() => setRequestPlan(text.subscriptionPage.labTitle)}>
+                {text.subscriptionPage.labCta}
+              </button>
+            )}
+          />
+        </div>
+      </section>
+
+      {requestPlan ? (
+        <LicenseRequestDialog
+          defaultPlan={requestPlan}
+          language={language}
+          text={text}
+          onClose={() => setRequestPlan(null)}
+        />
       ) : null}
     </section>
   );
 }
 
-function KofiTipPanel({ iframeUrl, text }: { iframeUrl: string; text: UiText }) {
+function LicenseFeatureCard({
+  icon,
+  title,
+  bullets
+}: {
+  icon: ReactNode;
+  title: string;
+  bullets: readonly string[];
+}) {
   return (
-    <section className="kofi-tip-panel" id="kofi-tip-panel" aria-labelledby="kofi-tip-panel-title">
-      <div className="kofi-tip-panel-copy">
-        <span className="mini-label">{text.supportPage.tipPanel}</span>
-        <h3 id="kofi-tip-panel-title">{text.supportPage.supportStore}</h3>
-        <p>{text.supportPage.donationCopy}</p>
-      </div>
-      <a className="button primary kofi-tip-action" href={KOFI_CHECKOUT_URL} target="_blank" rel="noreferrer">
-        <ExternalLink size={18} />
-        {text.supportPage.openKofi}
-      </a>
-      <iframe
-        id="kofiframe"
-        className="kofi-tip-iframe"
-        src={iframeUrl}
-        title={KOFI_ACCOUNT_SLUG}
-        loading="lazy"
-        referrerPolicy="strict-origin-when-cross-origin"
-        allow="payment"
-        height={712}
-      />
-    </section>
+    <article>
+      {icon}
+      <strong>{title}</strong>
+      <ul>
+        {bullets.map((bullet) => <li key={bullet}>{bullet}</li>)}
+      </ul>
+    </article>
+  );
+}
+
+function LicenseRequestDialog({
+  defaultPlan,
+  language,
+  text,
+  onClose
+}: {
+  defaultPlan: string;
+  language: Language;
+  text: UiText;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [plan, setPlan] = useState(defaultPlan);
+  const [devices, setDevices] = useState(defaultPlan.includes("Lab") ? "20" : defaultPlan.includes("Pro") ? "5" : "3");
+  const [message, setMessage] = useState("");
+
+  const requestHref = licenseRequestMailto({
+    language,
+    name,
+    email,
+    plan,
+    devices,
+    message
+  });
+
+  function updatePlan(nextPlan: string) {
+    setPlan(nextPlan);
+    setDevices(nextPlan.includes("Lab") ? "20" : nextPlan.includes("Pro") ? "5" : "3");
+  }
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="license-request-title" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) {
+        onClose();
+      }
+    }}>
+      <section className="license-request-modal">
+        <div className="account-heading">
+          <div>
+            <span className="mini-label">Brainok License</span>
+            <h2 id="license-request-title">{text.subscriptionPage.formTitle}</h2>
+          </div>
+          <button className="icon-button" type="button" aria-label={text.subscriptionPage.formCancel} onClick={onClose}>
+            <X size={18} />
+          </button>
+        </div>
+        <p className="panel-copy">{text.subscriptionPage.formIntro}</p>
+        <div className="form-grid">
+          <label>
+            {text.subscriptionPage.formName}
+            <input value={name} onChange={(event) => setName(event.target.value)} />
+          </label>
+          <label>
+            {text.subscriptionPage.formEmail}
+            <input value={email} type="email" onChange={(event) => setEmail(event.target.value)} />
+          </label>
+          <label>
+            {text.subscriptionPage.formPlan}
+            <select value={plan} onChange={(event) => updatePlan(event.target.value)}>
+              <option>{text.subscriptionPage.personalTitle}</option>
+              <option>{text.subscriptionPage.proTitle}</option>
+              <option>{text.subscriptionPage.labTitle}</option>
+            </select>
+          </label>
+          <label>
+            {text.subscriptionPage.formDevices}
+            <input value={devices} inputMode="numeric" onChange={(event) => setDevices(event.target.value)} />
+          </label>
+          <label className="wide-field">
+            {text.subscriptionPage.formMessage}
+            <textarea value={message} rows={4} onChange={(event) => setMessage(event.target.value)} />
+          </label>
+        </div>
+        <div className="button-row">
+          <button className="button secondary" type="button" onClick={onClose}>
+            {text.subscriptionPage.formCancel}
+          </button>
+          <a className="button primary" href={requestHref}>
+            <KeyRound size={22} />
+            {text.subscriptionPage.formSubmit}
+          </a>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -1657,18 +1779,6 @@ function SiteSettingsEditor({
               Download body
               <textarea value={draft.downloadBody} rows={2} onChange={(event) => updateDraft("downloadBody", event.target.value)} />
             </label>
-            <label>
-              Donation title
-              <input value={draft.donationTitle} onChange={(event) => updateDraft("donationTitle", event.target.value)} />
-            </label>
-            <label>
-              Donation note
-              <input value={draft.donationSuggested} onChange={(event) => updateDraft("donationSuggested", event.target.value)} />
-            </label>
-            <label className="wide-field">
-              Donation description
-              <textarea value={draft.donationDescription} rows={2} onChange={(event) => updateDraft("donationDescription", event.target.value)} />
-            </label>
           </div>
 
           <div className="publisher-actions">
@@ -2119,14 +2229,6 @@ function AccountView({
             <dd>{profile?.deviceLimit ?? "-"}</dd>
           </div>
           <div>
-            <dt>{text.accountView.supporter}</dt>
-            <dd>{profile?.supporterStatus || "none"}</dd>
-          </div>
-          <div>
-            <dt>{text.accountView.totalDonated}</dt>
-            <dd>{formatDonation(profile)}</dd>
-          </div>
-          <div>
             <dt>{text.accountView.inviteQuota}</dt>
             <dd>{profile?.inviteQuota ?? "-"}</dd>
           </div>
@@ -2143,7 +2245,7 @@ function AccountView({
           <>
             <h2>Apps</h2>
             <p className="panel-copy">
-              Add apps whenever you need them, then create app-specific activation numbers.
+              Add apps whenever you need them. Desktop apps use the universal Brainok license after their 30-day trial.
             </p>
 
             <div className="inline-form">
@@ -2340,7 +2442,7 @@ function AccountView({
                   <label>
                     Access model
                     <select
-                      value={appDraft.pricingMode === "donation" ? "free" : appDraft.pricingMode}
+                      value={appDraft.pricingMode}
                       onChange={(event) => {
                         const pricingMode = event.target.value as AppDraft["pricingMode"];
                         setAppDraft({
@@ -2414,14 +2516,218 @@ function AccountView({
               Download the DMG, launch the app, and complete activation inside the desktop app. A 30-day trial starts automatically on first launch.
             </p>
             <p className="activation-note">
-              Activation numbers are handled by the app itself, so this website no longer creates shared or one-off activation codes.
+              Download is always free. After the trial, enter one Brainok license inside the app to keep using every Brainok desktop app offline.
             </p>
           </>
         )}
 
       </div>
+
+      {canManageApps ? (
+        <LicenseAdminPanel onError={onError} />
+      ) : null}
     </section>
   );
+}
+
+const FRIEND_SEVERANCE_CODE = "BRAINOK-SEVERANCE-2026";
+
+function LicenseAdminPanel({ onError }: { onError: (message: string | null) => void }) {
+  const [licenses, setLicenses] = useState<LicenseSummary[]>([]);
+  const [search, setSearch] = useState("");
+  const [email, setEmail] = useState("");
+  const [plan, setPlan] = useState<BrainokLicensePlan>("friend");
+  const [licenseCode, setLicenseCode] = useState(FRIEND_SEVERANCE_CODE);
+  const [maxDevices, setMaxDevices] = useState("50");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    void refreshLicenses("");
+  }, []);
+
+  function updatePlan(nextPlan: BrainokLicensePlan) {
+    setPlan(nextPlan);
+    setMaxDevices(String(defaultLicenseDeviceLimit(nextPlan)));
+    if (nextPlan === "friend") {
+      setLicenseCode(FRIEND_SEVERANCE_CODE);
+    } else if (licenseCode === FRIEND_SEVERANCE_CODE) {
+      setLicenseCode("");
+    }
+  }
+
+  async function refreshLicenses(nextSearch = search) {
+    try {
+      setBusy(true);
+      onError(null);
+      const nextLicenses = await listLicenses(nextSearch.trim());
+      setLicenses(nextLicenses);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "Could not load licenses.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createNewLicense() {
+    try {
+      setBusy(true);
+      setStatus(null);
+      onError(null);
+      const created = await createLicense({
+        email,
+        plan,
+        licenseCode,
+        maxDevices: Number(maxDevices)
+      });
+      setStatus(`Created ${created.licenseCode}`);
+      setSearch(created.licenseCode);
+      await refreshLicenses(created.licenseCode);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "Could not create license.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disableSelectedLicense(code: string) {
+    try {
+      setBusy(true);
+      setStatus(null);
+      onError(null);
+      await disableLicense(code);
+      setStatus(`Disabled ${code}`);
+      await refreshLicenses();
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "Could not disable license.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resetDevice(activationId: string) {
+    try {
+      setBusy(true);
+      setStatus(null);
+      onError(null);
+      await resetLicenseDevice(activationId);
+      setStatus("Device reset.");
+      await refreshLicenses();
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "Could not reset this device.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="account-panel license-admin-panel">
+      <div className="account-heading">
+        <h2>Brainok Licenses</h2>
+        <span className="role-badge admin">Universal</span>
+      </div>
+      <p className="panel-copy">
+        One Brainok license unlocks PageWheel, Clipboard, Hotkey Launcher, and future Brainok apps after the 30-day trial.
+      </p>
+
+      <div className="license-admin-grid">
+        <div className="license-toolbox">
+          <h3>Generate license</h3>
+          <div className="editor-grid compact-editor-grid">
+            <label>
+              Subscriber email
+              <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="optional@example.com" />
+            </label>
+            <label>
+              Plan
+              <select value={plan} onChange={(event) => updatePlan(event.target.value as BrainokLicensePlan)}>
+                <option value="personal">Personal / 3 devices</option>
+                <option value="pro">Pro / 5 devices</option>
+                <option value="lab">Lab / 20-100 devices</option>
+                <option value="friend">Friend / shared code</option>
+              </select>
+            </label>
+            <label>
+              Activation code
+              <input value={licenseCode} onChange={(event) => setLicenseCode(event.target.value)} placeholder="Leave blank to generate" />
+            </label>
+            <label>
+              Max devices
+              <input type="number" min="1" max="100" value={maxDevices} onChange={(event) => setMaxDevices(event.target.value)} />
+            </label>
+          </div>
+          <button className="button primary full" disabled={busy} onClick={() => void createNewLicense()}>
+            <KeyRound size={18} />
+            Generate license
+          </button>
+          {status ? <p className="success-text">{status}</p> : null}
+        </div>
+
+        <div className="license-toolbox">
+          <h3>Search license</h3>
+          <div className="inline-form">
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Email or license code" />
+            <button className="button secondary" disabled={busy} onClick={() => void refreshLicenses()}>
+              <Search size={18} />
+              Search
+            </button>
+          </div>
+          <p className="quota-note">Empty search shows the latest licenses.</p>
+        </div>
+      </div>
+
+      <div className="license-list">
+        {licenses.length > 0 ? licenses.map((license) => (
+          <article className="license-card" key={license.licenseId}>
+            <div className="license-card-main">
+              <div>
+                <span className="mini-label">{license.plan.replace("_", " ")}</span>
+                <code>{license.licenseCode}</code>
+                <small>{license.email || "No email"} · {license.activationCount}/{license.maxDevices} devices · {license.status}</small>
+              </div>
+              <button className="button secondary" disabled={busy || license.status === "disabled"} onClick={() => void disableSelectedLicense(license.licenseCode)}>
+                <X size={18} />
+                Disable
+              </button>
+            </div>
+            <div className="license-activation-list">
+              {license.activations.length > 0 ? license.activations.map((activation) => (
+                <div className="license-activation-row" key={activation.activationId}>
+                  <span>
+                    <strong>{activation.deviceName}</strong>
+                    <small>{activation.status} · {activation.appName || activation.appId || "Brainok app"} · {activation.activatedAt ? formatTimestamp(activation.activatedAt) : "No date"}</small>
+                  </span>
+                  <button className="icon-button" type="button" aria-label="Reset device" title="Reset device" disabled={busy || activation.status !== "active"} onClick={() => void resetDevice(activation.activationId)}>
+                    <RotateCcw size={18} />
+                  </button>
+                </div>
+              )) : (
+                <p className="quota-note">No devices activated yet.</p>
+              )}
+            </div>
+          </article>
+        )) : (
+          <p className="quota-note">No licenses found.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function defaultLicenseDeviceLimit(plan: BrainokLicensePlan) {
+  if (plan === "pro") {
+    return 5;
+  }
+
+  if (plan === "lab") {
+    return 20;
+  }
+
+  if (plan === "friend") {
+    return 50;
+  }
+
+  return 3;
 }
 
 function SupportResourcesEditor({
@@ -2558,7 +2864,7 @@ interface AppDraft {
   appType: AppType;
   sortOrder: string;
   visibility: "public" | "private";
-  pricingMode: "invite_only" | "free" | "paid" | "donation";
+  pricingMode: "invite_only" | "free" | "paid";
   priceMajor: string;
   currency: string;
   billingInterval: "one_time" | "monthly" | "yearly" | "pay_what_you_want";
@@ -2613,7 +2919,7 @@ function appToDraft(app: BrainokApp): AppDraft {
     appType: appKind(app),
     sortOrder: String(displaySortOrder(app, 0)),
     visibility: app.visibility || "public",
-    pricingMode: app.pricing?.mode === "donation" ? "free" : app.pricing?.mode || "invite_only",
+    pricingMode: app.pricing?.mode || "invite_only",
     priceMajor: centsToMajor(app.pricing?.priceCents || 0),
     currency: app.pricing?.currency || "USD",
     billingInterval: app.pricing?.interval || "one_time",
@@ -2642,7 +2948,7 @@ function draftToUpdate(draft: AppDraft) {
     appType: draft.appType,
     sortOrder: Math.max(0, Math.round(Number(draft.sortOrder || 0))),
     visibility: draft.visibility,
-    pricingMode: draft.pricingMode === "donation" ? "free" : draft.pricingMode,
+    pricingMode: draft.pricingMode,
     priceCents: Math.max(0, Math.round(Number(draft.priceMajor || 0) * 100)),
     currency: draft.currency || "USD",
     billingInterval: draft.billingInterval,
@@ -3276,6 +3582,37 @@ function localizedDownloadLabel(kind: DownloadLinkKind, text: UiText) {
   return text.download.releasePage;
 }
 
+function licenseRequestMailto({
+  language,
+  name,
+  email,
+  plan,
+  devices,
+  message
+}: {
+  language: Language;
+  name: string;
+  email: string;
+  plan: string;
+  devices: string;
+  message: string;
+}) {
+  const subject = language === "ko" ? "Brainok License 요청" : "Brainok License request";
+  const body = [
+    "Brainok License Request",
+    "",
+    `Name: ${name}`,
+    `Email: ${email}`,
+    `Plan: ${plan}`,
+    `Macs: ${devices}`,
+    "",
+    "Message:",
+    message
+  ].join("\n");
+
+  return `mailto:${SUBSCRIPTION_REQUEST_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
 function accessLabel(mode: string) {
   if (mode === "free") {
     return "Free";
@@ -3283,10 +3620,6 @@ function accessLabel(mode: string) {
 
   if (mode === "paid") {
     return "Paid";
-  }
-
-  if (mode === "donation") {
-    return "Donation";
   }
 
   return "Invite only";
@@ -3312,10 +3645,6 @@ function formatAppPrice(app: BrainokApp) {
     return "Invite only";
   }
 
-  if (mode === "donation") {
-    return "Pay what you want";
-  }
-
   const currency = pricing?.currency || "USD";
   const amount = new Intl.NumberFormat(undefined, {
     style: "currency",
@@ -3335,18 +3664,6 @@ function formatAppPrice(app: BrainokApp) {
   }
 
   return amount;
-}
-
-function formatDonation(profile: UserProfile | null) {
-  if (!profile?.donationTotalCents) {
-    return "-";
-  }
-
-  const currency = profile.donationCurrency || "USD";
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency
-  }).format(profile.donationTotalCents / 100);
 }
 
 function PlanCard({

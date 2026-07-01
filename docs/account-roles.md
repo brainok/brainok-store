@@ -14,7 +14,10 @@ Admins can:
 - Create and update all app listings, including apps created before the single
   admin email was introduced.
 - Upload thumbnails, demo videos, installers, and docs.
-- Create app-specific activation numbers.
+- Search licenses and view license holders.
+- Generate universal Brainok licenses.
+- Reset a licensed device.
+- Disable a license.
 
 To seed the admin, sign in once with `brainok777@gmail.com`. The backend will
 set `accountRole: "admin"` for that email. You can also confirm the Firestore
@@ -50,7 +53,6 @@ They can:
 - Browse public app listings.
 - Download public installers.
 - Use a 30-day desktop trial.
-- Enter activation numbers inside the desktop app.
-- Donate optionally.
+- Enter one Brainok license inside the desktop app after the trial.
 
-They cannot upload apps, edit the site, or create activation numbers.
+They cannot upload apps, edit the site, or manage licenses.

@@ -40,7 +40,7 @@ select {
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 18px;
+  gap: 0;
   border: 0;
   background: transparent;
   color: inherit;
@@ -65,15 +65,15 @@ select {
 }
 
 .brand-mark {
-  width: 84px;
-  height: 84px;
+  width: clamp(340px, 38vw, 560px);
+  height: clamp(56px, 7vw, 94px);
   flex: 0 0 auto;
   display: block;
   overflow: hidden;
-  border: 1px solid #dce3ef;
-  border-radius: 18px;
-  background: #ffffff;
-  box-shadow: 0 10px 24px rgba(20, 30, 48, 0.14);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .brand-mark img,
@@ -81,7 +81,7 @@ select {
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .tabs {
@@ -822,13 +822,13 @@ select {
 }
 
 .download-logo {
-  width: 96px;
-  height: 96px;
+  width: min(360px, 100%);
+  height: 60px;
   display: block;
   overflow: hidden;
-  border-radius: 14px;
-  border: 1px solid #dce3ef;
-  background: #ffffff;
+  border-radius: 0;
+  border: 0;
+  background: transparent;
 }
 
 .download-hero-card h2 {
@@ -844,7 +844,7 @@ select {
 
 .download-catalog-header,
 .download-app-card,
-.support-resource-page {
+.subscription-page {
   border: 1px solid #dce3ef;
   border-radius: 8px;
   background: #ffffff;
@@ -971,62 +971,106 @@ select {
   line-height: 1.5;
 }
 
-.support-resource-page {
+.subscription-page {
   display: grid;
   gap: 22px;
   padding: 28px;
 }
 
-.kofi-tip-panel {
-  width: min(560px, 100%);
-  justify-self: center;
+.subscription-page .section-heading {
   display: grid;
-  gap: 16px;
-  padding: 20px;
+  gap: 14px;
+  max-width: 980px;
+}
+
+.subscription-page .section-heading h2 {
+  max-width: 920px;
+}
+
+.subscription-page .section-heading p {
+  max-width: 900px;
+}
+
+.subscription-page .section-heading .button {
+  justify-self: start;
+}
+
+.subscription-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.subscription-flow article {
+  min-height: 190px;
+  display: grid;
+  align-content: start;
+  gap: 12px;
   border: 1px solid #dce3ef;
   border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 18px 48px rgba(36, 48, 68, 0.07);
+  padding: 18px;
+  background: #f8fafc;
 }
 
-.kofi-tip-panel-copy {
-  display: grid;
-  gap: 8px;
-}
-
-.kofi-tip-panel-copy .mini-label {
-  margin: 0;
+.subscription-flow svg {
   color: #174ea6;
 }
 
-.kofi-tip-panel-copy h3 {
+.subscription-flow strong {
   margin: 0;
   color: #101827;
-  font-size: 28px;
-  line-height: 1.12;
+  font-size: 18px;
 }
 
-.kofi-tip-panel-copy p {
+.subscription-flow ul {
   margin: 0;
+  padding-left: 18px;
   color: #536174;
-  line-height: 1.65;
+  font-size: 15px;
+  line-height: 1.6;
 }
 
-.kofi-tip-action {
-  width: 100%;
-  min-height: 46px;
-  font-weight: 900;
+.subscription-flow li + li {
+  margin-top: 7px;
 }
 
-.kofi-tip-iframe {
-  box-sizing: content-box;
-  width: 100%;
-  height: 712px;
-  display: block;
-  border: 0;
+.subscription-plans {
+  display: grid;
+  gap: 14px;
+}
+
+.subscription-plans h3 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.subscription-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.license-request-modal {
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  display: grid;
+  gap: 16px;
+  border: 1px solid #dce3ef;
   border-radius: 8px;
-  padding: 4px;
-  background: #f9f9f9;
+  padding: 22px;
+  background: #ffffff;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.24);
 }
 
 .support-resource-board {
@@ -1442,6 +1486,87 @@ select {
 .activation-code-card small {
   color: #64748b;
   font-weight: 700;
+}
+
+.license-admin-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.license-admin-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  gap: 14px;
+}
+
+.license-toolbox {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #dce3ef;
+  border-radius: 8px;
+  padding: 16px;
+  background: #f8fafc;
+}
+
+.license-toolbox h3 {
+  margin: 0;
+  color: #172033;
+  font-size: 18px;
+}
+
+.compact-editor-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.license-list {
+  display: grid;
+  gap: 12px;
+}
+
+.license-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #dce3ef;
+  border-radius: 8px;
+  padding: 16px;
+  background: #ffffff;
+}
+
+.license-card-main,
+.license-activation-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.license-card code {
+  display: block;
+  margin: 6px 0;
+  color: #172033;
+  font-size: 18px;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.license-card small,
+.license-activation-row small {
+  display: block;
+  color: #64748b;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.license-activation-list {
+  display: grid;
+  gap: 8px;
+}
+
+.license-activation-row {
+  min-height: 46px;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #f8fafc;
 }
 
 .form-grid {
@@ -2494,6 +2619,12 @@ dd {
   .nested-editor-grid,
   .app-icon-editor,
   .media-editor,
+  .subscription-flow,
+  .subscription-plan-grid,
+  .license-admin-grid,
+  .compact-editor-grid,
+  .license-card-main,
+  .license-activation-row,
   .support-detail-layout,
   .login-mode-switch,
   .upload-strip,
@@ -2514,9 +2645,8 @@ dd {
   }
 
   .brand-mark {
-    width: 68px;
-    height: 68px;
-    border-radius: 15px;
+    width: min(320px, 72vw);
+    height: 54px;
   }
 
   .brand strong {
@@ -2526,18 +2656,6 @@ dd {
   .header-actions {
     justify-content: flex-start;
     flex-wrap: wrap;
-  }
-
-  .kofi-tip-panel {
-    padding: 14px;
-  }
-
-  .kofi-tip-panel-copy h3 {
-    font-size: 24px;
-  }
-
-  .kofi-tip-iframe {
-    height: 712px;
   }
 
   .mega-menu {

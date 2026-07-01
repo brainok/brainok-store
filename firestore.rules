@@ -74,6 +74,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /licenses/{licenseId} {
+      allow read, write: if false;
+    }
+
+    match /activations/{activationId} {
+      allow read, write: if false;
+    }
+
     match /subscriptions/{subscriptionId} {
       allow read: if signedIn() && resource.data.uid == request.auth.uid;
       allow write: if false;

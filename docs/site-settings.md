@@ -16,7 +16,6 @@ The public homepage text can be edited from the web app without touching code.
 - Hero eyebrow, title, and description
 - Primary and secondary button labels
 - Download page title, subtitle, and body text
-- Donation title, suggested note, and description
 
 The values are stored in Firestore at:
 

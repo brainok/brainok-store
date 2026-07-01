@@ -1,12 +1,15 @@
-# Activation Rollout
+# Brainok License Rollout
 
-The preferred desktop flow is Snagit-style activation:
+The preferred desktop flow is universal Brainok licensing:
 
-- Anyone can download the installer.
+- Anyone can download the DMG without login.
 - The desktop app starts a 30-day trial on first launch.
-- The user enters an app-specific activation number inside the desktop app.
-- Firestore stores activation per app and per computer.
-- Donations update supporter data only; they do not grant activation.
+- After the trial, the user enters one Brainok license inside the app.
+- Firebase verifies the license once and records the device activation.
+- The app stores the successful license locally, preferably in Keychain.
+- Activated apps can run offline forever unless the local license is removed.
+
+Do not protect the DMG. Protect the software after the trial.
 
 ## Seed your own account
 
@@ -21,47 +24,135 @@ After signing in once on the website, open Firebase Console > Firestore >
 }
 ```
 
-Then open the website Apps tab:
+Then open the website Account tab:
 
-1. Edit `Site settings` if the homepage text needs changing.
-2. Add an app name.
-3. Fill the app description, media, visibility, pricing, checkout URL, and download URLs.
-4. Save the app settings.
-5. Create an activation number for it.
+1. Edit app listings and download URLs as needed.
+2. Open `Brainok Licenses`.
+3. Generate personal, pro, lab, or friend licenses.
+4. Search license holder email or license code when support is needed.
+5. Reset devices or disable licenses from the same panel.
 
-Do not give normal users `accountRole: "admin"`. App access should be granted
-through activation numbers, trials, or payment, not through account role changes.
+Do not give normal users `accountRole: "admin"`. License access should be
+granted through Brainok licenses, trials, or future payment webhooks.
 
-For each Electron app build, copy that app's `appId` into `app-electron/.env`:
+## Friend / Severance Code
 
-```env
-VITE_BRAINOK_APP_ID=your-app-id
+Use this shared Friend code:
+
+```txt
+BRAINOK-SEVERANCE-2026
 ```
 
-## User flow
+Create it as:
 
-1. Visitor downloads the installer from the website.
-2. The desktop app launches and calls `startAppTrial`.
-3. Firebase creates `/activations/{appId}-{machineHashHash}` with
-   `status: "trial"` and `trialEndsAt` set to 30 days later.
-4. While the trial is valid, the app unlocks.
-5. The user enters an activation number such as `BRN-ABCD-EFGH-IJKL`.
-6. `activateAppCode` validates `/activationCodes/{code}` and updates the
-   device activation to `status: "active"`.
-7. After trial expiry, the app stays locked until a valid activation number is
-   entered.
+- `plan`: `friend`
+- `status`: `active`
+- `maxDevices`: `50`
+- `allowedApps`: `["*"]`
 
-## Offline grace
+## User Flow
 
-The desktop app stores the last successful server activation check locally.
-If the app cannot reach Firebase, it may unlock offline only when:
+1. Visitor downloads the DMG from `store.brainok.net`.
+2. The app stores first launch/trial start locally.
+3. The user gets a 30-day trial.
+4. After trial expiry, the app shows an activation dialog.
+5. The user enters a code such as `BRAINOK-PRO-4A7K-92QD`.
+6. The app calls `activateBrainokLicense` with `code`, `deviceId`, and optional app/device metadata.
+7. Firebase validates `/licenses/{licenseCode}` and writes `/activations/{licenseId-deviceHash}`.
+8. The app stores the returned local license record and continues offline.
 
-- The cached status is `active` and the last server check was within 7 days.
-- Or the cached status is `trial`, the last server check was within 7 days,
-  and `trialEndsAt` is still in the future.
+## Desktop Call
 
-New installs, first trial start, and activation-number entry still require an
-internet connection.
+Callable function:
+
+```txt
+activateBrainokLicense
+```
+
+Request:
+
+```json
+{
+  "code": "BRAINOK-SEVERANCE-2026",
+  "deviceId": "stable-device-id-from-the-app",
+  "deviceName": "Hyosuk MacBook Pro",
+  "appId": "brainok-pagewheel",
+  "appName": "Brainok PageWheel",
+  "os": "mac",
+  "appVersion": "1.0.0"
+}
+```
+
+Success response:
+
+```json
+{
+  "ok": true,
+  "activated": true,
+  "activatedDate": "2026-07-01T00:00:00.000Z",
+  "licenseId": "lic_sha256-prefix",
+  "licenseCode": "BRAINOK-SEVERANCE-2026",
+  "plan": "friend",
+  "status": "active",
+  "maxDevices": 50,
+  "deviceId": "stable-device-id-from-the-app"
+}
+```
+
+## Local App Storage
+
+Store trial data:
+
+- first launch date
+- trial start date
+
+Store activated license data:
+
+```json
+{
+  "activated": true,
+  "licenseId": "lic_sha256-prefix",
+  "activatedDate": "2026-07-01T00:00:00.000Z",
+  "plan": "friend",
+  "deviceId": "stable-device-id-from-the-app"
+}
+```
+
+Prefer Keychain. UserDefaults is acceptable only as a fallback.
+
+## License Shape
+
+```json
+{
+  "licenseId": "lic_sha256-prefix",
+  "licenseCode": "BRAINOK-PRO-4A7K-92QD",
+  "email": "subscriber@example.com",
+  "plan": "pro",
+  "status": "active",
+  "maxDevices": 5,
+  "activationCount": 0,
+  "allowedApps": ["*"],
+  "issuedAt": "serverTimestamp"
+}
+```
+
+## Activation Shape
+
+```json
+{
+  "activationId": "lic_sha256-prefix-devicehash",
+  "licenseId": "lic_sha256-prefix",
+  "licenseCode": "BRAINOK-PRO-4A7K-92QD",
+  "deviceId": "stable-device-id-from-the-app",
+  "deviceIdHash": "sha256",
+  "deviceName": "Hyosuk MacBook Pro",
+  "appId": "brainok-pagewheel",
+  "appName": "Brainok PageWheel",
+  "status": "active",
+  "source": "brainok_license",
+  "activatedAt": "timestamp"
+}
+```
 
 ## Thumbnail assets
 
@@ -76,33 +167,3 @@ Use 16:9 thumbnails for app cards and product previews.
 - Google Drive share links must be public to anyone with the link. The website
   converts `drive.google.com/file/d/.../view` links to a thumbnail URL
   automatically, but private Drive files still cannot render.
-
-## Activation code shape
-
-```json
-{
-  "code": "BRN-ABCD-EFGH-IJKL",
-  "appId": "neuro-lab-1a2b3c",
-  "appName": "Neuro Lab",
-  "createdByUid": "admin-uid",
-  "status": "unused",
-  "maxActivations": 1,
-  "activationCount": 0,
-  "createdAt": "serverTimestamp"
-}
-```
-
-## Device activation shape
-
-```json
-{
-  "activationId": "neuro-lab-1a2b3c-machinehash",
-  "appId": "neuro-lab-1a2b3c",
-  "appName": "Neuro Lab",
-  "machineHashHash": "sha256",
-  "status": "trial",
-  "source": "trial",
-  "trialStartedAt": "timestamp",
-  "trialEndsAt": "timestamp"
-}
-```

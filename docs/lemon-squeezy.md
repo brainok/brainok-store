@@ -1,74 +1,32 @@
-# Lemon Squeezy Setup
+# License Payment Notes
 
-## Product
+Brainok Store now uses a Brainok License model:
 
-Create one pay-what-you-want product for general support:
+- Public DMG download
+- 30-day trial
+- Brainok license activation after trial
+- Offline use after activation
 
-- Brainok Support
-- Pricing: Pay what you want
-- Suggested price: `$9.99`
-- Minimum price: your choice, e.g. `$1.99`
-- Generate license keys: off
+There is no public tip or contribution panel.
 
-Copy the checkout share URL into:
+## Current operation
 
-```text
-firebase-functions/.env
-```
+Licenses are issued manually from the admin account:
 
-as:
+1. Open the website.
+2. Sign in as `brainok777@gmail.com`.
+3. Open `Account`.
+4. Use `Brainok Licenses` to generate, search, disable, or reset licenses.
 
-```text
-LEMONSQUEEZY_CHECKOUT_URL=https://your-store.lemonsqueezy.com/checkout/buy/YOUR_VARIANT_ID
-```
-
-## Checkout metadata
-
-The `createCheckout` function appends:
+## Future Toss Payments flow
 
 ```text
-checkout[custom][uid]
-checkout[custom][source]
-checkout[email]
+Toss Payments success
+  -> Webhook
+  -> Generate Brainok license
+  -> Save /licenses/{licenseCode}
+  -> Send email
 ```
 
-The webhook then reads `meta.custom_data.uid` and updates `/users/{uid}`.
-
-## Per-app paid access
-
-For apps that should be paid, create a Lemon Squeezy product or variant for
-that app, then paste its checkout URL into the app settings on the website.
-The `createAppCheckout` function appends:
-
-```text
-checkout[custom][uid]
-checkout[custom][appId]
-checkout[custom][appName]
-checkout[custom][purpose]=app_purchase
-checkout[custom][source]=web
-checkout[email]
-```
-
-When the webhook sees `purpose=app_purchase`, it grants or revokes only that
-app's access under `/users/{uid}.apps.{appId}`.
-
-## Webhook
-
-Deploy `lemonsqueezyWebhook`, then paste its URL into Lemon Squeezy webhook settings.
-
-Subscribe to:
-
-- `order_created`
-- `order_refunded`
-- `subscription_created` if any app uses subscriptions
-- `subscription_updated` if any app uses subscriptions
-- `subscription_cancelled` if any app uses subscriptions
-- `subscription_expired` if any app uses subscriptions
-
-The webhook verifies `X-Signature` with HMAC-SHA256 before processing.
-
-Official references:
-
-- https://docs.lemonsqueezy.com/help/webhooks/signing-requests
-- https://docs.lemonsqueezy.com/help/webhooks/event-types
-- https://docs.lemonsqueezy.com/help/checkout/passing-custom-data
+The desktop app does not need payment-provider logic. It only needs to call
+`activateBrainokLicense` with the user-entered code and the device ID.

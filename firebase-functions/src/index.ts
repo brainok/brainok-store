@@ -3,6 +3,7 @@ import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import nodemailer from "nodemailer";
 import {
+  DocumentSnapshot,
   FieldValue,
   Timestamp,
   getFirestore
@@ -39,9 +40,11 @@ type AccountRole = "admin" | "user";
 type AppRole = "owner" | "admin" | "user";
 type AppVisibility = "public" | "private";
 type AppType = "application" | "web_app";
-type AppPricingMode = "invite_only" | "free" | "paid" | "donation";
+type AppPricingMode = "invite_only" | "free" | "paid";
 type AppBillingInterval = "one_time" | "monthly" | "yearly" | "pay_what_you_want";
 type ActivationStatus = "not_found" | "trial" | "active" | "expired" | "revoked";
+type BrainokLicensePlan = "personal" | "pro" | "lab" | "friend";
+type BrainokLicenseStatus = "active" | "disabled" | "expired";
 
 const trialLengthMs = 30 * 24 * 60 * 60 * 1000;
 
@@ -51,17 +54,12 @@ const defaultSiteSettings = {
   heroEyebrow: "Trial-first desktop software",
   heroTitle: "Useful desktop tools, released like real products.",
   heroDescription:
-    "Publish apps with thumbnails, demos, installers, activation numbers, and optional donations in one place. Every app can start with a 30-day trial.",
+    "Publish apps with thumbnails, demos, installers, and universal Brainok licenses in one place. Every app can start with a 30-day trial.",
   primaryCtaLabel: "Free Download",
   secondaryCtaLabel: "View Apps",
   downloadTitle: "Download Brainok App",
-  downloadSubtitle: "No credit card needed",
-  downloadBody: "Choose the installer for your operating system. The desktop app starts a 30-day trial and accepts an activation number inside the app.",
-  donationTitle: "Donation",
-  donationDescription:
-    "Donations are optional. They support development, but they do not replace invite access or paid app access.",
-  donationSuggested: "Suggested donation: $9.99",
-  donationCheckoutUrl: "",
+  downloadSubtitle: "Free download. No account required.",
+  downloadBody: "Choose the installer for your operating system. The desktop app starts a 30-day trial and accepts a Brainok License inside the app.",
   supportResources: [
     {
       id: "tutorials",
@@ -301,6 +299,13 @@ function isSiteAdmin(profile: Record<string, unknown>): boolean {
   return inferredAccountRole(profile) === "admin";
 }
 
+async function requireSiteAdmin(uid: string): Promise<void> {
+  const userSnap = await db.collection("users").doc(uid).get();
+  if (!userSnap.exists || !isSiteAdmin(userSnap.data() || {})) {
+    throw new HttpsError("permission-denied", "Only the site admin can manage licenses.");
+  }
+}
+
 function sha256(input: string | Buffer): string {
   return crypto.createHash("sha256").update(input).digest("hex");
 }
@@ -467,7 +472,7 @@ async function applyLemonEvent(payload: LemonPayload, eventName: string) {
   }
 
   if (eventName === "order_created" || eventName === "order_refunded") {
-    await applyDonationEvent(payload, eventName);
+    await writePendingPayment(payload, eventName);
     return;
   }
 
@@ -510,67 +515,6 @@ async function applyLemonEvent(payload: LemonPayload, eventName: string) {
       { merge: true }
     );
   }
-}
-
-async function applyDonationEvent(payload: LemonPayload, eventName: string) {
-  const userRef = await resolveUserRef(payload);
-  if (!userRef) {
-    await writePendingPayment(payload, eventName);
-    return;
-  }
-
-  const attrs = payloadAttributes(payload);
-  const isRefund = eventName === "order_refunded";
-  const orderId =
-    asString(payload.data?.id) ||
-    asString(attrs.order_id) ||
-    sha256(JSON.stringify(payload));
-  const amountCents = asNumber(attrs.total) ?? asNumber(attrs.subtotal);
-  const currency = asString(attrs.currency);
-  const email = payloadEmail(payload);
-  const customData = payloadCustomData(payload);
-  const appId = asString(customData.appId);
-  const purpose = asString(customData.purpose);
-
-  const userUpdate = compactMap({
-    email,
-    emailLower: emailLower(email),
-    supporterStatus: isRefund ? "refunded" : "supporter",
-    donationCurrency: currency,
-    lastPaymentProvider: "lemonsqueezy",
-    lemonSqueezy: lemonState(payload, eventName),
-    lastDonationAt: isRefund ? undefined : FieldValue.serverTimestamp(),
-    lastRefundAt: isRefund ? FieldValue.serverTimestamp() : undefined,
-    updatedAt: FieldValue.serverTimestamp()
-  });
-
-  if (!isRefund) {
-    userUpdate.donationCount = FieldValue.increment(1);
-    if (amountCents !== undefined) {
-      userUpdate.donationTotalCents = FieldValue.increment(amountCents);
-    }
-  }
-
-  await userRef.set(userUpdate, { merge: true });
-
-  await db.collection("donations").doc(orderId).set(
-    compactMap({
-      uid: userRef.id,
-    provider: "lemonsqueezy",
-      eventName,
-      orderId,
-      appId,
-      purpose,
-      amountCents,
-      currency,
-      email,
-      lemonSqueezy: lemonState(payload, eventName),
-      rawAttributes: attrs,
-      updatedAt: FieldValue.serverTimestamp(),
-      createdAt: FieldValue.serverTimestamp()
-    }),
-    { merge: true }
-  );
 }
 
 async function applyAppPurchaseEvent(payload: LemonPayload, eventName: string) {
@@ -703,7 +647,7 @@ export const lemonsqueezyWebhook = onRequest(
 
       response.status(200).json({ ok: true });
     } catch (error) {
-      console.error("Lemon Squeezy webhook failed", error);
+      console.error("Payment webhook failed", error);
       response.status(500).json({ ok: false });
     }
   }
@@ -731,9 +675,6 @@ export const ensureUserProfile = onCall({ region }, async (request) => {
         photoURL: user.photoURL || null,
         accessStatus: existing.accessStatus || "pending",
         deviceLimit: Math.max(Number(existing.deviceLimit || 0), 5),
-        supporterStatus: existing.supporterStatus || "none",
-        donationCount: existing.donationCount ?? 0,
-        donationTotalCents: existing.donationTotalCents ?? 0,
         lastLoginAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
       },
@@ -756,9 +697,6 @@ export const ensureUserProfile = onCall({ region }, async (request) => {
       inviteQuota: 0,
       deviceLimit: 5,
       subscriptionProvider: null,
-      supporterStatus: "none",
-      donationCount: 0,
-      donationTotalCents: 0,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
       lastLoginAt: FieldValue.serverTimestamp()
@@ -818,10 +756,6 @@ export const updateSiteSettings = onCall({ region }, async (request) => {
     downloadTitle: boundedString(data.downloadTitle, defaultSiteSettings.downloadTitle, 80),
     downloadSubtitle: boundedString(data.downloadSubtitle, defaultSiteSettings.downloadSubtitle, 80),
     downloadBody: boundedString(data.downloadBody, defaultSiteSettings.downloadBody, 400),
-    donationTitle: boundedString(data.donationTitle, defaultSiteSettings.donationTitle, 80),
-    donationDescription: boundedString(data.donationDescription, defaultSiteSettings.donationDescription, 400),
-    donationSuggested: boundedString(data.donationSuggested, defaultSiteSettings.donationSuggested, 80),
-    donationCheckoutUrl: boundedString(data.donationCheckoutUrl, defaultSiteSettings.donationCheckoutUrl, 500),
     supportResources: boundedSupportResources(data.supportResources),
     updatedBy: uid,
     updatedAt: FieldValue.serverTimestamp()
@@ -931,6 +865,76 @@ function benefitFromRequest(_value: unknown): InviteBenefit {
 function generateActivationCode(): string {
   const raw = crypto.randomBytes(6).toString("hex").toUpperCase();
   return `BRN-${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
+}
+
+function normalizeLicenseCode(value: unknown): string | undefined {
+  const code = asString(value)
+    ?.toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  if (!code || code.length < 8 || code.length > 80) {
+    return undefined;
+  }
+
+  return code;
+}
+
+function generateLicenseCode(plan: BrainokLicensePlan): string {
+  const prefix = plan === "pro"
+    ? "PRO"
+    : plan === "lab"
+      ? "LAB"
+      : plan === "friend"
+        ? "FRIEND"
+        : "SUPPORTER";
+  const raw = crypto.randomBytes(4).toString("hex").toUpperCase();
+  return `BRAINOK-${prefix}-${raw.slice(0, 4)}-${raw.slice(4, 8)}`;
+}
+
+function licenseIdForCode(code: string): string {
+  return `lic_${sha256(code).slice(0, 20)}`;
+}
+
+function normalizePlan(value: unknown): BrainokLicensePlan {
+  const raw = asString(value);
+  if (raw === "supporter") {
+    return "personal";
+  }
+
+  if (raw === "pro_supporter") {
+    return "pro";
+  }
+
+  return oneOf<BrainokLicensePlan>(
+    raw,
+    ["personal", "pro", "lab", "friend"],
+    "personal"
+  );
+}
+
+function defaultDeviceLimit(plan: BrainokLicensePlan): number {
+  if (plan === "pro") {
+    return 5;
+  }
+
+  if (plan === "lab") {
+    return 20;
+  }
+
+  if (plan === "friend") {
+    return 50;
+  }
+
+  return 3;
+}
+
+function licenseDeviceLimit(plan: BrainokLicensePlan, value: unknown): number {
+  const fallback = defaultDeviceLimit(plan);
+  const limit = Math.round(asNumber(value) ?? fallback);
+  const maximum = plan === "lab" || plan === "friend" ? 100 : 20;
+  return Math.min(maximum, Math.max(1, limit));
 }
 
 function normalizeActivationCode(value: unknown): string | undefined {
@@ -1072,7 +1076,7 @@ function appSettingsFromRequest(
 ) {
   const pricingMode = oneOf<AppPricingMode>(
     data.pricingMode,
-    ["invite_only", "free", "paid", "donation"],
+    ["invite_only", "free", "paid"],
     defaults.pricingMode || "invite_only"
   );
   const billingInterval = oneOf<AppBillingInterval>(
@@ -1233,7 +1237,7 @@ export const updateApp = onCall({ region }, async (request) => {
     const settings = appSettingsFromRequest(data, {
       pricingMode: oneOf<AppPricingMode>(
         existingPricing.mode,
-        ["invite_only", "free", "paid", "donation"],
+        ["invite_only", "free", "paid"],
         "invite_only"
       ),
       priceCents: normalizePriceCents(existingPricing.priceCents),
@@ -1480,6 +1484,204 @@ export const listMyActivationCodes = onCall({ region }, async (request) => {
     .map(({ createdAtMillis: _createdAtMillis, ...activationCode }) => activationCode);
 
   return { activationCodes };
+});
+
+export const createLicense = onCall({ region }, async (request) => {
+  const uid = requireUid(request);
+  await requireSiteAdmin(uid);
+
+  const data = (request.data || {}) as Record<string, unknown>;
+  const plan = normalizePlan(data.plan);
+  const licenseCode = normalizeLicenseCode(data.licenseCode) || generateLicenseCode(plan);
+  const licenseId = licenseIdForCode(licenseCode);
+  const email = asString(data.email) || null;
+  const maxDevices = licenseDeviceLimit(plan, data.maxDevices);
+  const licenseRef = db.collection("licenses").doc(licenseCode);
+  const existing = await licenseRef.get();
+
+  if (existing.exists) {
+    throw new HttpsError("already-exists", "This license code already exists.");
+  }
+
+  await licenseRef.create(compactMap({
+    licenseId,
+    licenseCode,
+    email,
+    emailLower: emailLower(email),
+    plan,
+    status: "active" satisfies BrainokLicenseStatus,
+    maxDevices,
+    activationCount: 0,
+    allowedApps: ["*"],
+    source: "manual",
+    createdByUid: uid,
+    issuedAt: FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp()
+  }));
+
+  return { licenseId, licenseCode, email, plan, status: "active", maxDevices };
+});
+
+export const listLicenses = onCall({ region }, async (request) => {
+  const uid = requireUid(request);
+  await requireSiteAdmin(uid);
+
+  const data = (request.data || {}) as Record<string, unknown>;
+  const search = asString(data.search);
+  const normalizedSearch = normalizeLicenseCode(search);
+  const searchEmail = emailLower(search);
+  let licenseDocs: DocumentSnapshot[] = [];
+
+  if (normalizedSearch) {
+    const exactSnap = await db.collection("licenses").doc(normalizedSearch).get();
+    if (exactSnap.exists) {
+      licenseDocs = [exactSnap];
+    }
+  }
+
+  if (licenseDocs.length === 0 && searchEmail) {
+    const emailSnap = await db.collection("licenses")
+      .where("emailLower", "==", searchEmail)
+      .limit(50)
+      .get();
+    licenseDocs = emailSnap.docs;
+  }
+
+  if (licenseDocs.length === 0 && !search) {
+    const latestSnap = await db.collection("licenses")
+      .orderBy("createdAt", "desc")
+      .limit(50)
+      .get();
+    licenseDocs = latestSnap.docs;
+  }
+
+  const licenses = await Promise.all(licenseDocs.map(async (licenseDoc) => {
+    const license = licenseDoc.data() || {};
+    const licenseId = asString(license.licenseId) || licenseIdForCode(licenseDoc.id);
+    const activationsSnap = await db.collection("activations")
+      .where("licenseId", "==", licenseId)
+      .limit(100)
+      .get();
+    const activations = activationsSnap.docs
+      .map((activationDoc) => {
+        const activation = activationDoc.data() || {};
+        const activatedAt = activation.activatedAt instanceof Timestamp
+          ? activation.activatedAt.toDate().toISOString()
+          : null;
+        const activatedAtMillis = activation.activatedAt instanceof Timestamp
+          ? activation.activatedAt.toMillis()
+          : 0;
+
+        return {
+          activationId: activationDoc.id,
+          deviceId: asString(activation.deviceId) || "",
+          deviceName: asString(activation.deviceName) || "Unknown device",
+          appId: asString(activation.appId) || null,
+          appName: asString(activation.appName) || null,
+          status: asString(activation.status) || "active",
+          activatedAt,
+          activatedAtMillis
+        };
+      })
+      .sort((left, right) => right.activatedAtMillis - left.activatedAtMillis)
+      .map(({ activatedAtMillis: _activatedAtMillis, ...activation }) => activation);
+
+    const createdAt = license.createdAt instanceof Timestamp
+      ? license.createdAt.toDate().toISOString()
+      : null;
+    const issuedAt = license.issuedAt instanceof Timestamp
+      ? license.issuedAt.toDate().toISOString()
+      : createdAt;
+
+    return {
+      licenseId,
+      licenseCode: asString(license.licenseCode) || licenseDoc.id,
+      email: asString(license.email) || null,
+      plan: normalizePlan(license.plan),
+      status: asString(license.status) || "active",
+      maxDevices: Math.max(1, Number(license.maxDevices || 1)),
+      activationCount: activations.filter((activation) => activation.status === "active").length,
+      issuedAt,
+      createdAt,
+      activations
+    };
+  }));
+
+  return { licenses };
+});
+
+export const disableLicense = onCall({ region }, async (request) => {
+  const uid = requireUid(request);
+  await requireSiteAdmin(uid);
+
+  const data = (request.data || {}) as Record<string, unknown>;
+  const code = normalizeLicenseCode(data.licenseCode);
+  const licenseId = asString(data.licenseId);
+  let licenseRef: FirebaseFirestore.DocumentReference | null = code
+    ? db.collection("licenses").doc(code)
+    : null;
+
+  if (!licenseRef && licenseId) {
+    const snapshot = await db.collection("licenses")
+      .where("licenseId", "==", licenseId)
+      .limit(1)
+      .get();
+    licenseRef = snapshot.docs[0]?.ref || null;
+  }
+
+  if (!licenseRef) {
+    throw new HttpsError("invalid-argument", "licenseCode or licenseId is required.");
+  }
+
+  await licenseRef.update({
+    status: "disabled",
+    disabledAt: FieldValue.serverTimestamp(),
+    disabledByUid: uid,
+    updatedAt: FieldValue.serverTimestamp()
+  });
+
+  return { ok: true };
+});
+
+export const resetLicenseDevice = onCall({ region }, async (request) => {
+  const uid = requireUid(request);
+  await requireSiteAdmin(uid);
+
+  const data = (request.data || {}) as Record<string, unknown>;
+  const activationId = asString(data.activationId);
+  if (!activationId) {
+    throw new HttpsError("invalid-argument", "activationId is required.");
+  }
+
+  const activationRef = db.collection("activations").doc(activationId);
+
+  await db.runTransaction(async (transaction) => {
+    const activationSnap = await transaction.get(activationRef);
+    if (!activationSnap.exists) {
+      throw new HttpsError("not-found", "Activation does not exist.");
+    }
+
+    const activation = activationSnap.data() || {};
+    const licenseCode = normalizeLicenseCode(activation.licenseCode);
+    const active = activation.status === "active";
+
+    transaction.update(activationRef, {
+      status: "reset",
+      resetAt: FieldValue.serverTimestamp(),
+      resetByUid: uid,
+      updatedAt: FieldValue.serverTimestamp()
+    });
+
+    if (licenseCode && active) {
+      transaction.update(db.collection("licenses").doc(licenseCode), {
+        activationCount: FieldValue.increment(-1),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+    }
+  });
+
+  return { ok: true, activationId };
 });
 
 export const createSharedAccessCode = onCall({ region }, async (request) => {
@@ -1864,6 +2066,146 @@ export const activateAppCode = onCall({ region }, async (request) => {
   return result;
 });
 
+export const activateBrainokLicense = onCall({ region }, async (request) => {
+  const data = (request.data || {}) as Record<string, unknown>;
+  const licenseCode = normalizeLicenseCode(data.code || data.licenseCode);
+  const deviceId = asString(data.deviceId);
+
+  if (!licenseCode) {
+    throw new HttpsError("invalid-argument", "A valid Brainok license code is required.");
+  }
+
+  if (!deviceId || deviceId.length < 4 || deviceId.length > 256) {
+    throw new HttpsError("invalid-argument", "deviceId is required.");
+  }
+
+  const deviceIdHash = sha256(deviceId);
+  const licenseRef = db.collection("licenses").doc(licenseCode);
+  const activatedAt = Timestamp.fromMillis(Date.now());
+
+  const result = await db.runTransaction(async (transaction) => {
+    const licenseSnap = await transaction.get(licenseRef);
+    if (!licenseSnap.exists) {
+      throw new HttpsError("not-found", "License code does not exist.");
+    }
+
+    const license = licenseSnap.data() || {};
+    const licenseId = asString(license.licenseId) || licenseIdForCode(licenseCode);
+    const activationId = `${licenseId}-${deviceIdHash}`;
+    const activationRef = db.collection("activations").doc(activationId);
+    const [activationSnap, activeActivationsSnap] = await Promise.all([
+      transaction.get(activationRef),
+      transaction.get(
+        db.collection("activations")
+          .where("licenseId", "==", licenseId)
+          .where("status", "==", "active")
+      )
+    ]);
+
+    const status = oneOf<BrainokLicenseStatus>(
+      license.status,
+      ["active", "disabled", "expired"],
+      "active"
+    );
+    if (status !== "active") {
+      throw new HttpsError("failed-precondition", "This license is not active.");
+    }
+
+    const expiresAtMs = timestampMillis(license.expiresAt);
+    if (expiresAtMs && expiresAtMs <= Date.now()) {
+      transaction.update(licenseRef, {
+        status: "expired",
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      throw new HttpsError("failed-precondition", "This license has expired.");
+    }
+
+    const maxDevices = Math.max(1, Number(license.maxDevices || 1));
+    const existingActivation = activationSnap.exists ? activationSnap.data() || {} : {};
+    const alreadyActivatedHere = existingActivation.status === "active";
+
+    if (!alreadyActivatedHere && activeActivationsSnap.size >= maxDevices) {
+      throw new HttpsError("failed-precondition", `Device limit reached (${maxDevices}).`);
+    }
+
+    const activationRecord = compactMap({
+      activationId,
+      licenseId,
+      licenseCode,
+      deviceId,
+      deviceIdHash,
+      deviceName: boundedString(data.deviceName, "Unknown device", 120),
+      appId: asString(data.appId) || null,
+      appName: asString(data.appName) || null,
+      os: asString(data.os) || asString(existingActivation.os) || "unknown",
+      appVersion: asString(data.appVersion) || asString(existingActivation.appVersion) || null,
+      status: "active",
+      source: "brainok_license",
+      activatedAt: alreadyActivatedHere ? existingActivation.activatedAt || activatedAt : activatedAt,
+      lastCheckedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      createdAt: activationSnap.exists ? undefined : FieldValue.serverTimestamp()
+    });
+
+    transaction.set(activationRef, activationRecord, { merge: true });
+
+    const licensePatch: Record<string, unknown> = {
+      lastActivatedAt: activatedAt,
+      updatedAt: FieldValue.serverTimestamp()
+    };
+    if (!alreadyActivatedHere) {
+      licensePatch.activationCount = FieldValue.increment(1);
+    }
+    transaction.update(licenseRef, licensePatch);
+
+    return {
+      ok: true,
+      activated: true,
+      activatedDate: activatedAt.toDate().toISOString(),
+      licenseId,
+      licenseCode,
+      plan: normalizePlan(license.plan),
+      status: "active",
+      maxDevices,
+      deviceId
+    };
+  });
+
+  return result;
+});
+
+export const checkBrainokLicense = onCall({ region }, async (request) => {
+  const data = (request.data || {}) as Record<string, unknown>;
+  const licenseCode = normalizeLicenseCode(data.code || data.licenseCode);
+  const deviceId = asString(data.deviceId);
+
+  if (!licenseCode || !deviceId) {
+    throw new HttpsError("invalid-argument", "licenseCode and deviceId are required.");
+  }
+
+  const licenseSnap = await db.collection("licenses").doc(licenseCode).get();
+  if (!licenseSnap.exists) {
+    return { ok: true, status: "not_found", activated: false };
+  }
+
+  const license = licenseSnap.data() || {};
+  const licenseId = asString(license.licenseId) || licenseIdForCode(licenseCode);
+  const activationId = `${licenseId}-${sha256(deviceId)}`;
+  const activationSnap = await db.collection("activations").doc(activationId).get();
+  const status = asString(license.status) || "active";
+  const activated = status === "active" && activationSnap.exists && activationSnap.data()?.status === "active";
+
+  return {
+    ok: true,
+    status,
+    activated,
+    licenseId,
+    licenseCode,
+    plan: normalizePlan(license.plan),
+    maxDevices: Math.max(1, Number(license.maxDevices || 1))
+  };
+});
+
 export const createAppCheckout = onCall({ region }, async (request) => {
   const uid = requireUid(request);
   const user = await auth.getUser(uid);
@@ -1887,11 +2229,11 @@ export const createAppCheckout = onCall({ region }, async (request) => {
   const pricing = (app.pricing || {}) as Record<string, unknown>;
   const mode = oneOf<AppPricingMode>(
     pricing.mode,
-    ["invite_only", "free", "paid", "donation"],
+    ["invite_only", "free", "paid"],
     "invite_only"
   );
 
-  if (mode !== "paid" && mode !== "donation") {
+  if (mode !== "paid") {
     throw new HttpsError("failed-precondition", "This app does not use checkout.");
   }
 
@@ -1908,10 +2250,7 @@ export const createAppCheckout = onCall({ region }, async (request) => {
   checkoutUrl.searchParams.set("checkout[custom][uid]", uid);
   checkoutUrl.searchParams.set("checkout[custom][appId]", appId);
   checkoutUrl.searchParams.set("checkout[custom][appName]", asString(app.name) || appId);
-  checkoutUrl.searchParams.set(
-    "checkout[custom][purpose]",
-    mode === "donation" ? "app_donation" : "app_purchase"
-  );
+  checkoutUrl.searchParams.set("checkout[custom][purpose]", "app_purchase");
   checkoutUrl.searchParams.set("checkout[custom][source]", "web");
 
   return { url: checkoutUrl.toString() };
@@ -1947,7 +2286,7 @@ export const grantFreeAppAccess = onCall({ region }, async (request) => {
     const pricing = (app.pricing || {}) as Record<string, unknown>;
     const mode = oneOf<AppPricingMode>(
       pricing.mode,
-      ["invite_only", "free", "paid", "donation"],
+      ["invite_only", "free", "paid"],
       "invite_only"
     );
 

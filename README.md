@@ -2,15 +2,15 @@
 
 This repository is structured for a real desktop app release:
 
-- `app-electron`: Electron desktop app with Firebase Auth, invite-gated access, device registration, donation links, and updater hooks.
-- `web-netlify`: React + Vite website for support, invite access, download, and account management.
-- `firebase-functions`: Firebase Functions for invite codes, Lemon Squeezy donation webhooks, checkout links, and device limits.
+- `app-electron`: Desktop app shell with Firebase integration, trial state, device registration, licensing, and updater hooks.
+- `web-netlify`: React + Vite website for app listings, free downloads, Brainok License guidance, and account management.
+- `firebase-functions`: Firebase Functions for app publishing, Brainok license management, QnA email, and device limits.
 - `shared-types`: Shared TypeScript contracts used by the app, website, and functions.
 - `docs`: Deployment and operational runbooks.
 
 ## Source of truth
 
-Firestore is the account, invite-access, and support-status source of truth. New users start as `accessStatus: "pending"` and must redeem an invite code before using the early desktop build. Donations never unlock access by themselves.
+Firestore is the account, app listing, license, and activation source of truth. Public DMG downloads stay free. Desktop apps use a 30-day trial, then a universal Brainok license unlocks continued use.
 
 ## First setup
 
@@ -23,11 +23,10 @@ Firestore is the account, invite-access, and support-status source of truth. New
    ```
 
 4. Add Firebase client config to `app-electron/.env` and `web-netlify/.env`.
-5. Add the Lemon Squeezy checkout URL and QnA SMTP settings to `firebase-functions/.env`.
-6. Set the webhook signing secret and QnA email app password:
+5. Add Firebase client config and QnA SMTP settings to `firebase-functions/.env`.
+6. Set the QnA email app password:
 
    ```bash
-   npx firebase functions:secrets:set LEMONSQUEEZY_WEBHOOK_SECRET
    npx firebase functions:secrets:set QNA_SMTP_PASSWORD
    ```
 
@@ -38,18 +37,12 @@ Firestore is the account, invite-access, and support-status source of truth. New
    npm run deploy:functions
    ```
 
-## Lemon Squeezy webhook
+## Licensing
 
-Configure the webhook URL from the deployed function and subscribe to:
-
-- `order_created`
-- `order_refunded`
-
-The function verifies Lemon Squeezy's `X-Signature` HMAC-SHA256 header against the raw request body before touching Firestore.
+Admins can generate, search, disable, and reset Brainok licenses from the web
+admin account. Desktop apps call `activateBrainokLicense` once, store the
+successful local license, and then run offline.
 
 ## Useful docs
 
-- Lemon Squeezy webhook signing: https://docs.lemonsqueezy.com/help/webhooks/signing-requests
-- Lemon Squeezy event types: https://docs.lemonsqueezy.com/help/webhooks/event-types
-- Lemon Squeezy checkout custom data: https://docs.lemonsqueezy.com/help/checkout/passing-custom-data
 - Firebase HTTP functions: https://firebase.google.com/docs/functions/http-events

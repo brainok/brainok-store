@@ -32,14 +32,15 @@ export interface LemonSqueezySubscriptionState {
   lastWebhookAt?: string;
 }
 
-export type SupporterStatus = "none" | "supporter" | "refunded";
 export type AccountRole = "admin" | "user";
 export type AccessStatus = "pending" | "active" | "revoked";
 export type AppRole = "owner" | "admin" | "user";
 export type AppVisibility = "public" | "private";
 export type AppType = "application" | "web_app";
-export type AppPricingMode = "invite_only" | "free" | "paid" | "donation";
+export type AppPricingMode = "invite_only" | "free" | "paid";
 export type AppBillingInterval = "one_time" | "monthly" | "yearly" | "pay_what_you_want";
+export type BrainokLicensePlan = "personal" | "pro" | "lab" | "friend";
+export type BrainokLicenseStatus = "active" | "disabled" | "expired";
 
 export interface AppAccess {
   appId: string;
@@ -64,10 +65,6 @@ export interface UserProfile {
   inviteQuota: number;
   deviceLimit: number;
   subscriptionProvider: SubscriptionProvider | null;
-  supporterStatus?: SupporterStatus;
-  donationCount?: number;
-  donationTotalCents?: number;
-  donationCurrency?: string;
   lastPaymentProvider?: SubscriptionProvider;
   apps?: Record<string, AppAccess>;
   lemonSqueezy?: LemonSqueezySubscriptionState;
@@ -84,6 +81,51 @@ export interface RegisteredDevice {
   status: DeviceStatus;
   createdAt: unknown;
   lastSeenAt: unknown;
+}
+
+export interface BrainokLicense {
+  licenseId: string;
+  licenseCode: string;
+  email?: string | null;
+  plan: BrainokLicensePlan;
+  status: BrainokLicenseStatus;
+  maxDevices: number;
+  activationCount: number;
+  allowedApps: string[];
+  issuedAt: unknown;
+  createdAt: unknown;
+  updatedAt: unknown;
+}
+
+export interface BrainokLicenseActivation {
+  activationId: string;
+  licenseId: string;
+  licenseCode: string;
+  deviceId: string;
+  deviceIdHash: string;
+  deviceName?: string;
+  appId?: string | null;
+  appName?: string | null;
+  status: "active" | "reset" | "revoked";
+  source: "brainok_license";
+  os?: DesktopOS;
+  appVersion?: string | null;
+  activatedAt: unknown;
+  lastCheckedAt?: unknown;
+  createdAt: unknown;
+  updatedAt: unknown;
+}
+
+export interface ActivateBrainokLicenseResult {
+  ok: true;
+  activated: true;
+  activatedDate: string;
+  licenseId: string;
+  licenseCode: string;
+  plan: BrainokLicensePlan;
+  status: "active";
+  maxDevices: number;
+  deviceId: string;
 }
 
 export type InviteBenefit = "beta_access";
