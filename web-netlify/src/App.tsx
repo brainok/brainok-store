@@ -2536,11 +2536,12 @@ function LicenseAdminPanel({ onError }: { onError: (message: string | null) => v
   const [licenses, setLicenses] = useState<LicenseSummary[]>([]);
   const [search, setSearch] = useState("");
   const [email, setEmail] = useState("");
-  const [plan, setPlan] = useState<BrainokLicensePlan>("friend");
-  const [licenseCode, setLicenseCode] = useState(FRIEND_SEVERANCE_CODE);
-  const [maxDevices, setMaxDevices] = useState("50");
+  const [plan, setPlan] = useState<BrainokLicensePlan>("personal");
+  const [licenseCode, setLicenseCode] = useState("");
+  const [maxDevices, setMaxDevices] = useState("3");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [panelError, setPanelError] = useState<string | null>(null);
 
   useEffect(() => {
     void refreshLicenses("");
@@ -2560,10 +2561,13 @@ function LicenseAdminPanel({ onError }: { onError: (message: string | null) => v
     try {
       setBusy(true);
       onError(null);
+      setPanelError(null);
       const nextLicenses = await listLicenses(nextSearch.trim());
       setLicenses(nextLicenses);
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Could not load licenses.");
+      const message = licenseAdminErrorMessage(error, "Could not load licenses.");
+      setPanelError(message);
+      onError(message);
     } finally {
       setBusy(false);
     }
@@ -2572,19 +2576,23 @@ function LicenseAdminPanel({ onError }: { onError: (message: string | null) => v
   async function createNewLicense() {
     try {
       setBusy(true);
-      setStatus(null);
+      setStatus("Creating license...");
       onError(null);
+      setPanelError(null);
       const created = await createLicense({
-        email,
+        email: email.trim(),
         plan,
-        licenseCode,
+        licenseCode: licenseCode.trim(),
         maxDevices: Number(maxDevices)
       });
       setStatus(`Created ${created.licenseCode}`);
       setSearch(created.licenseCode);
       await refreshLicenses(created.licenseCode);
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Could not create license.");
+      const message = licenseAdminErrorMessage(error, "Could not create license.");
+      setStatus(null);
+      setPanelError(message);
+      onError(message);
     } finally {
       setBusy(false);
     }
@@ -2595,11 +2603,14 @@ function LicenseAdminPanel({ onError }: { onError: (message: string | null) => v
       setBusy(true);
       setStatus(null);
       onError(null);
+      setPanelError(null);
       await disableLicense(code);
       setStatus(`Disabled ${code}`);
       await refreshLicenses();
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Could not disable license.");
+      const message = licenseAdminErrorMessage(error, "Could not disable license.");
+      setPanelError(message);
+      onError(message);
     } finally {
       setBusy(false);
     }
@@ -2610,11 +2621,14 @@ function LicenseAdminPanel({ onError }: { onError: (message: string | null) => v
       setBusy(true);
       setStatus(null);
       onError(null);
+      setPanelError(null);
       await resetLicenseDevice(activationId);
       setStatus("Device reset.");
       await refreshLicenses();
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Could not reset this device.");
+      const message = licenseAdminErrorMessage(error, "Could not reset this device.");
+      setPanelError(message);
+      onError(message);
     } finally {
       setBusy(false);
     }
@@ -2629,13 +2643,16 @@ function LicenseAdminPanel({ onError }: { onError: (message: string | null) => v
       <p className="panel-copy">
         One Brainok license unlocks PageWheel, Clipboard, Hotkey Launcher, and future Brainok apps after the 30-day trial.
       </p>
+      <p className="activation-note">
+        Current process: after a buyer pays, generate a license here, copy the code, and send it to the buyer by email. Automatic purchase-to-license email delivery is not connected yet.
+      </p>
 
       <div className="license-admin-grid">
         <div className="license-toolbox">
           <h3>Generate license</h3>
           <div className="editor-grid compact-editor-grid">
             <label>
-              Subscriber email
+              Buyer email
               <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="optional@example.com" />
             </label>
             <label>
@@ -2650,6 +2667,7 @@ function LicenseAdminPanel({ onError }: { onError: (message: string | null) => v
             <label>
               Activation code
               <input value={licenseCode} onChange={(event) => setLicenseCode(event.target.value)} placeholder="Leave blank to generate" />
+              <small>Leave blank for Personal, Pro, or Lab. Use Friend only for one shared code.</small>
             </label>
             <label>
               Max devices
@@ -2658,9 +2676,10 @@ function LicenseAdminPanel({ onError }: { onError: (message: string | null) => v
           </div>
           <button className="button primary full" disabled={busy} onClick={() => void createNewLicense()}>
             <KeyRound size={18} />
-            Generate license
+            {busy ? "Working..." : "Generate license"}
           </button>
           {status ? <p className="success-text">{status}</p> : null}
+          {panelError ? <p className="error-text inline-error">{panelError}</p> : null}
         </div>
 
         <div className="license-toolbox">
@@ -2712,6 +2731,24 @@ function LicenseAdminPanel({ onError }: { onError: (message: string | null) => v
       </div>
     </div>
   );
+}
+
+function licenseAdminErrorMessage(error: unknown, fallback: string) {
+  const rawCode = typeof error === "object" && error && "code" in error
+    ? String((error as { code?: unknown }).code || "")
+    : "";
+  const rawMessage = error instanceof Error ? error.message : "";
+  const message = rawMessage.replace(/^Firebase:\s*/i, "").replace(/\s*\([^)]*\)\.?$/i, "").trim();
+
+  if (rawCode.includes("functions/not-found") || message === "not-found") {
+    return "License server functions are not deployed yet. Deploy Firebase Functions, then try again.";
+  }
+
+  if (rawCode.includes("functions/internal") || message === "internal") {
+    return "License server returned an internal error. Check Firebase Functions logs and try again.";
+  }
+
+  return message || fallback;
 }
 
 function defaultLicenseDeviceLimit(plan: BrainokLicensePlan) {
