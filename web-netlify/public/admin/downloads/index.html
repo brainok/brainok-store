@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Brainok Download Stats</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --ink: #1d2433;
+      --muted: #657083;
+      --line: #dde3ee;
+      --accent: #1769e0;
+      --danger: #b42318;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      padding: 32px;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.05;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 20px 0;
+    }
+
+    .stat {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 28px;
+      line-height: 1.1;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 760px;
+    }
+
+    th,
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #222f43;
+      color: white;
+      font-size: 13px;
+      letter-spacing: 0;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .downloads {
+      font-weight: 700;
+      text-align: right;
+    }
+
+    .error {
+      color: var(--danger);
+    }
+
+    @media (max-width: 720px) {
+      body {
+        padding: 20px;
+      }
+
+      header,
+      .summary {
+        display: block;
+      }
+
+      header p,
+      .stat {
+        margin-top: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Brainok GitHub Download Stats</h1>
+        <p>GitHub Release의 DMG asset 다운로드 수를 합산합니다.</p>
+      </div>
+      <p id="updated">Loading...</p>
+    </header>
+
+    <section class="summary" aria-label="Download summary">
+      <div class="stat">
+        <span>Total downloads</span>
+        <strong id="total">0</strong>
+      </div>
+      <div class="stat">
+        <span>Release assets</span>
+        <strong id="assetCount">0</strong>
+      </div>
+      <div class="stat">
+        <span>Checked repositories</span>
+        <strong id="repoCount">0</strong>
+      </div>
+    </section>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>App</th>
+            <th>Version</th>
+            <th>Asset</th>
+            <th>Updated</th>
+            <th>Downloads</th>
+          </tr>
+        </thead>
+        <tbody id="stats"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    const repos = [
+      "Recent-File-Launcher-mac-release",
+      "Brainok-PageWheel-mac-release",
+      "Brainok-clipboard-mac-release",
+      "Multiple-file-viewer-mac-release",
+      "Yonsei-PDF-Downloader-mac-release",
+      "Smart-dicom-viewer-mac-release"
+    ];
+
+    const owner = "brainok";
+
+    const numberFormat = new Intl.NumberFormat();
+    const tbody = document.getElementById("stats");
+    const updated = document.getElementById("updated");
+    const total = document.getElementById("total");
+    const assetCount = document.getElementById("assetCount");
+    const repoCount = document.getElementById("repoCount");
+
+    function createCell(text, className) {
+      const cell = document.createElement("td");
+      cell.textContent = text;
+      if (className) {
+        cell.className = className;
+      }
+      return cell;
+    }
+
+    function createLinkCell(text, href) {
+      const cell = document.createElement("td");
+      const link = document.createElement("a");
+      link.href = href;
+      link.target = "_blank";
+      link.rel = "noreferrer";
+      link.textContent = text;
+      cell.appendChild(link);
+      return cell;
+    }
+
+    function addStatusRow(repo, message) {
+      const row = document.createElement("tr");
+      row.append(
+        createCell(repo),
+        createCell("-"),
+        createCell(message, "error"),
+        createCell("-"),
+        createCell("-", "downloads")
+      );
+      tbody.appendChild(row);
+    }
+
+    async function loadStats() {
+      let totalDownloads = 0;
+      let totalAssets = 0;
+      let checkedRepos = 0;
+
+      for (const repo of repos) {
+        try {
+          const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases`);
+          if (!res.ok) {
+            throw new Error(`GitHub API ${res.status}`);
+          }
+
+          const releases = await res.json();
+          checkedRepos += 1;
+
+          releases.forEach(release => {
+            release.assets.forEach(asset => {
+              if (!asset.name.toLowerCase().endsWith(".dmg")) return;
+
+              totalDownloads += asset.download_count;
+              totalAssets += 1;
+
+              const row = document.createElement("tr");
+              row.append(
+                createLinkCell(repo, `https://github.com/${owner}/${repo}`),
+                createLinkCell(release.tag_name, release.html_url),
+                createLinkCell(asset.name, asset.browser_download_url),
+                createCell(asset.updated_at ? new Date(asset.updated_at).toLocaleDateString() : "-"),
+                createCell(numberFormat.format(asset.download_count), "downloads")
+              );
+              tbody.appendChild(row);
+            });
+          });
+        } catch (e) {
+          console.error(repo, e);
+          addStatusRow(repo, e instanceof Error ? e.message : "Failed to load");
+        }
+      }
+
+      total.textContent = numberFormat.format(totalDownloads);
+      assetCount.textContent = numberFormat.format(totalAssets);
+      repoCount.textContent = `${checkedRepos} / ${repos.length}`;
+      updated.textContent = `Last updated: ${new Date().toLocaleString()}`;
+    }
+
+    loadStats();
+  </script>
+</body>
+</html>
