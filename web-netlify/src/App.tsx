@@ -192,8 +192,8 @@ const UI_TEXT = {
     subscriptionPage: {
       eyebrow: "Brainok 라이선스",
       title: "하나의 라이선스. 모든 Brainok 앱.",
-      intro: "Brainok 앱은 누구나 무료로 다운로드하고 30일 동안 모든 기능을 체험할 수 있습니다. 체험 기간이 끝나면 하나의 Brainok 라이선스로 현재 앱과 앞으로 출시될 Brainok 앱을 계속 사용할 수 있습니다.",
-      primaryCta: "Brainok 라이선스 받기",
+      intro: "Brainok 앱은 누구나 무료로 다운로드하고 30일 동안 모든 기능을 체험할 수 있습니다. 유료 라이선스와 자동 발급은 Toss Pay 연동 후 열 예정입니다.",
+      primaryCta: "라이선스 준비 중",
       freeTitle: "무료 다운로드",
       freeBullets: ["계정 필요 없음", "30일 전체 기능 체험", "원하는 앱을 바로 다운로드"],
       oneTitle: "하나의 라이선스",
@@ -204,15 +204,15 @@ const UI_TEXT = {
       personalTitle: "Personal License",
       personalPrice: "Mac 3대",
       personalCopy: "개인 사용자를 위한 기본 라이선스입니다.",
-      personalCta: "라이선스 요청",
+      personalCta: "준비 중",
       proTitle: "Pro License",
       proPrice: "Mac 5대",
       proCopy: "여러 Mac을 오가며 쓰는 사용자에게 적합합니다.",
-      proCta: "라이선스 요청",
+      proCta: "준비 중",
       labTitle: "Lab License",
       labPrice: "Mac 20대 이상",
       labCopy: "연구실, 진료실, 기관처럼 여러 컴퓨터에서 함께 사용할 때 적합합니다.",
-      labCta: "문의하기",
+      labCta: "준비 중",
       formTitle: "Brainok 라이선스 받기",
       formIntro: "아래 내용을 보내면 관리자에게 이메일이 작성됩니다. 현재는 자동 결제가 아니라 관리자 확인 후 라이선스 코드를 발급하는 방식입니다.",
       processTitle: "현재 발급 흐름",
@@ -370,8 +370,8 @@ const UI_TEXT = {
     subscriptionPage: {
       eyebrow: "Brainok License",
       title: "One License. Every Brainok App.",
-      intro: "Download any Brainok app for free and enjoy a full 30-day trial. When you're ready, activate a single Brainok License to unlock all current and future Brainok applications.",
-      primaryCta: "Get Brainok License",
+      intro: "Download any Brainok app for free and enjoy a full 30-day trial. Paid licenses and automatic delivery will open later with Toss Pay integration.",
+      primaryCta: "License Coming Soon",
       freeTitle: "Free Download",
       freeBullets: ["No account required", "30-day trial", "Download any app instantly"],
       oneTitle: "One License",
@@ -382,15 +382,15 @@ const UI_TEXT = {
       personalTitle: "Personal License",
       personalPrice: "3 Macs",
       personalCopy: "Ideal for personal use.",
-      personalCta: "Request License",
+      personalCta: "Coming Soon",
       proTitle: "Pro License",
       proPrice: "5 Macs",
       proCopy: "For power users.",
-      proCta: "Request License",
+      proCta: "Coming Soon",
       labTitle: "Lab License",
       labPrice: "20+ Macs",
       labCopy: "For research labs and organizations.",
-      labCta: "Contact Us",
+      labCta: "Coming Soon",
       formTitle: "Get Brainok License",
       formIntro: "This opens an email request to the admin. Automatic checkout-to-license delivery is not connected yet.",
       processTitle: "Current issuing flow",
@@ -732,7 +732,6 @@ function SubscriptionView({
   text: UiText;
 }) {
   const [selectedSupportAppId, setSelectedSupportAppId] = useState<string | null>(null);
-  const [requestPlan, setRequestPlan] = useState<string | null>(null);
   const supportApps = useMemo(
     () => sortAppsForDisplay(apps.filter((app) => app.status === "active")),
     [apps]
@@ -774,7 +773,7 @@ function SubscriptionView({
         <span className="mini-label">{text.subscriptionPage.eyebrow}</span>
         <h2>{text.subscriptionPage.title}</h2>
         <p>{text.subscriptionPage.intro}</p>
-        <button className="button primary large" type="button" onClick={() => setRequestPlan(text.subscriptionPage.personalTitle)}>
+        <button className="button primary large" type="button" disabled>
           <KeyRound size={18} />
           {text.subscriptionPage.primaryCta}
         </button>
@@ -794,7 +793,7 @@ function SubscriptionView({
             price={text.subscriptionPage.personalPrice}
             features={[text.subscriptionPage.personalCopy]}
             action={(
-              <button className="button primary full" type="button" onClick={() => setRequestPlan(text.subscriptionPage.personalTitle)}>
+              <button className="button primary full" type="button" disabled>
                 {text.subscriptionPage.personalCta}
               </button>
             )}
@@ -804,7 +803,7 @@ function SubscriptionView({
             price={text.subscriptionPage.proPrice}
             features={[text.subscriptionPage.proCopy]}
             action={(
-              <button className="button primary full" type="button" onClick={() => setRequestPlan(text.subscriptionPage.proTitle)}>
+              <button className="button primary full" type="button" disabled>
                 {text.subscriptionPage.proCta}
               </button>
             )}
@@ -814,7 +813,7 @@ function SubscriptionView({
             price={text.subscriptionPage.labPrice}
             features={[text.subscriptionPage.labCopy]}
             action={(
-              <button className="button secondary full" type="button" onClick={() => setRequestPlan(text.subscriptionPage.labTitle)}>
+              <button className="button secondary full" type="button" disabled>
                 {text.subscriptionPage.labCta}
               </button>
             )}
@@ -822,14 +821,6 @@ function SubscriptionView({
         </div>
       </section>
 
-      {requestPlan ? (
-        <LicenseRequestDialog
-          defaultPlan={requestPlan}
-          language={language}
-          text={text}
-          onClose={() => setRequestPlan(null)}
-        />
-      ) : null}
     </section>
   );
 }
