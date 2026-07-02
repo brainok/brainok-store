@@ -76,7 +76,7 @@ select {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 14px;
+  gap: 28px;
   overflow: visible;
   border: 0;
   border-radius: 0;
@@ -855,7 +855,7 @@ select {
   height: auto;
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 18px;
   overflow: visible;
   border-radius: 0;
   border: 0;
@@ -1101,7 +1101,7 @@ select {
 }
 
 .license-request-modal {
-  width: min(640px, calc(100vw - 32px));
+  width: min(760px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
   overflow: auto;
   display: grid;
@@ -1111,6 +1111,38 @@ select {
   padding: 22px;
   background: #ffffff;
   box-shadow: 0 28px 80px rgba(15, 23, 42, 0.24);
+}
+
+.license-process {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid #dce3ef;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.license-process strong {
+  color: #10223d;
+  font-size: 17px;
+}
+
+.license-process ol {
+  margin: 0;
+  padding-left: 20px;
+  color: #46556a;
+  line-height: 1.55;
+}
+
+.license-process li + li {
+  margin-top: 6px;
+}
+
+.license-process p {
+  margin: 0;
+  color: #5b6a7f;
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 .support-resource-board {

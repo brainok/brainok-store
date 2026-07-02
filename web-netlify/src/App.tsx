@@ -214,7 +214,16 @@ const UI_TEXT = {
       labCopy: "연구실, 진료실, 기관처럼 여러 컴퓨터에서 함께 사용할 때 적합합니다.",
       labCta: "문의하기",
       formTitle: "Brainok 라이선스 받기",
-      formIntro: "필요한 라이선스를 알려 주세요. 확인 후 다음 절차를 안내해 드립니다.",
+      formIntro: "아래 내용을 보내면 관리자에게 이메일이 작성됩니다. 현재는 자동 결제가 아니라 관리자 확인 후 라이선스 코드를 발급하는 방식입니다.",
+      processTitle: "현재 발급 흐름",
+      processSteps: [
+        "구매자/사용자가 이 요청을 보내면 메일 앱이 열리고 admin에게 요청 메일이 갑니다.",
+        "admin은 결제와 요청 내용을 확인한 뒤 Account > Brainok Licenses에서 새 Brainok License code를 생성합니다.",
+        "admin이 생성된 코드를 구매자에게 이메일로 보내면, 구매자는 DMG 앱 안의 라이선스 입력 화면에 그 코드를 붙여 넣습니다.",
+        "앱은 Firebase의 activateBrainokLicense에 코드를 확인하고, 해당 기기를 라이선스에 등록합니다.",
+        "성공 후 앱은 활성화 정보를 로컬에 저장해 오프라인에서도 계속 사용할 수 있습니다."
+      ],
+      processNote: "DMG 앱 안에 매번 새 코드를 넣어 다시 빌드하는 구조가 아닙니다. 앱은 고정된 Firebase 연결 코드만 갖고 있고, 실제 라이선스 코드는 서버에 새로 추가됩니다.",
       formName: "이름",
       formEmail: "이메일",
       formPlan: "라이선스",
@@ -383,7 +392,16 @@ const UI_TEXT = {
       labCopy: "For research labs and organizations.",
       labCta: "Contact Us",
       formTitle: "Get Brainok License",
-      formIntro: "Tell us which license you need. We will reply with the next steps.",
+      formIntro: "This opens an email request to the admin. Automatic checkout-to-license delivery is not connected yet.",
+      processTitle: "Current issuing flow",
+      processSteps: [
+        "The buyer sends this request, which opens an email to the admin.",
+        "The admin confirms the payment and request, then creates a new Brainok License code in Account > Brainok Licenses.",
+        "The admin emails that generated code to the buyer, and the buyer pastes it into the license screen inside the DMG app.",
+        "The app verifies the code through Firebase activateBrainokLicense and registers that device to the license.",
+        "After activation succeeds, the app stores the local activation record and can keep working offline."
+      ],
+      processNote: "The DMG app does not need to be rebuilt with a new code each time. The app keeps fixed Firebase connection logic, while new license codes are added on the server.",
       formName: "Name",
       formEmail: "Email",
       formPlan: "Plan",
@@ -884,6 +902,13 @@ function LicenseRequestDialog({
           </button>
         </div>
         <p className="panel-copy">{text.subscriptionPage.formIntro}</p>
+        <section className="license-process">
+          <strong>{text.subscriptionPage.processTitle}</strong>
+          <ol>
+            {text.subscriptionPage.processSteps.map((step) => <li key={step}>{step}</li>)}
+          </ol>
+          <p>{text.subscriptionPage.processNote}</p>
+        </section>
         <div className="form-grid">
           <label>
             {text.subscriptionPage.formName}
