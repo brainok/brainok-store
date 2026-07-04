@@ -55,6 +55,7 @@ import {
   ensureUserProfile,
   getAppFromServer,
   listLicenses,
+  requestBrainokLicense,
   resendLicenseEmail,
   resetLicenseDevice,
   sendTestLicenseEmail,
@@ -873,19 +874,45 @@ function LicenseRequestDialog({
   const [plan, setPlan] = useState(defaultPlan);
   const [devices, setDevices] = useState(defaultPlan.includes("Lab") ? "20" : defaultPlan.includes("Pro") ? "5" : "3");
   const [message, setMessage] = useState("");
-
-  const requestHref = licenseRequestMailto({
-    language,
-    name,
-    email,
-    plan,
-    devices,
-    message
-  });
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const fallbackHref = licenseRequestMailto({ language, name, email, plan, devices, message });
 
   function updatePlan(nextPlan: string) {
     setPlan(nextPlan);
     setDevices(nextPlan.includes("Lab") ? "20" : nextPlan.includes("Pro") ? "5" : "3");
+  }
+
+  async function submitRequest() {
+    try {
+      setBusy(true);
+      setStatus(null);
+      setError(null);
+      const result = await requestBrainokLicense({
+        name: name.trim(),
+        email: email.trim(),
+        plan,
+        devices: Number(devices) || 1,
+        message: message.trim(),
+        language
+      });
+
+      if (result.emailNotificationStatus === "sent") {
+        setStatus(language === "ko"
+          ? "요청이 접수됐고 관리자에게 Resend 이메일이 발송됐습니다."
+          : "Request saved and sent to the admin through Resend.");
+      } else {
+        setStatus(language === "ko"
+          ? "요청은 저장됐지만 관리자 알림 이메일 발송에 실패했습니다."
+          : "Request saved, but the admin notification email failed.");
+      }
+    } catch (requestError) {
+      const messageText = requestError instanceof Error ? requestError.message : "";
+      setError(messageText || (language === "ko" ? "요청을 보낼 수 없습니다." : "Could not send this request."));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -919,7 +946,7 @@ function LicenseRequestDialog({
           </label>
           <label>
             {text.subscriptionPage.formEmail}
-            <input value={email} type="email" onChange={(event) => setEmail(event.target.value)} />
+            <input value={email} type="email" required onChange={(event) => setEmail(event.target.value)} />
           </label>
           <label>
             {text.subscriptionPage.formPlan}
@@ -938,14 +965,21 @@ function LicenseRequestDialog({
             <textarea value={message} rows={4} onChange={(event) => setMessage(event.target.value)} />
           </label>
         </div>
+        {status ? <p className="success-text">{status}</p> : null}
+        {error ? <p className="error-text inline-error">{error}</p> : null}
         <div className="button-row">
-          <button className="button secondary" type="button" onClick={onClose}>
+          <button className="button secondary" type="button" disabled={busy} onClick={onClose}>
             {text.subscriptionPage.formCancel}
           </button>
-          <a className="button primary" href={requestHref}>
+          {error ? (
+            <a className="button secondary" href={fallbackHref}>
+              {language === "ko" ? "메일 앱으로 보내기" : "Send by mail app"}
+            </a>
+          ) : null}
+          <button className="button primary" type="button" disabled={busy || !email.trim()} onClick={() => void submitRequest()}>
             <KeyRound size={22} />
-            {text.subscriptionPage.formSubmit}
-          </a>
+            {busy ? (language === "ko" ? "보내는 중..." : "Sending...") : text.subscriptionPage.formSubmit}
+          </button>
         </div>
       </section>
     </div>
@@ -3698,18 +3732,6 @@ function appDownloadLinks(app: BrainokApp) {
   return links;
 }
 
-function localizedDownloadLabel(kind: DownloadLinkKind, text: UiText) {
-  if (kind === "windows") {
-    return text.download.downloadWin;
-  }
-
-  if (kind === "mac") {
-    return text.download.downloadMac;
-  }
-
-  return text.download.releasePage;
-}
-
 function licenseRequestMailto({
   language,
   name,
@@ -3739,6 +3761,18 @@ function licenseRequestMailto({
   ].join("\n");
 
   return `mailto:${SUBSCRIPTION_REQUEST_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+function localizedDownloadLabel(kind: DownloadLinkKind, text: UiText) {
+  if (kind === "windows") {
+    return text.download.downloadWin;
+  }
+
+  if (kind === "mac") {
+    return text.download.downloadMac;
+  }
+
+  return text.download.releasePage;
 }
 
 function accessLabel(mode: string) {

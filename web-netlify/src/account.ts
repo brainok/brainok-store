@@ -325,6 +325,24 @@ export async function createLicense(input: {
   };
 }
 
+export async function requestBrainokLicense(input: {
+  name?: string;
+  email: string;
+  plan: string;
+  devices: number;
+  message?: string;
+  language: "ko" | "en";
+}) {
+  const result = await httpsCallable(functions, "requestBrainokLicense")(input);
+  return result.data as {
+    ok: true;
+    requestId: string;
+    emailNotificationStatus: "sent" | "failed";
+    mailLogId?: string;
+    errorMessage?: string;
+  };
+}
+
 export async function listLicenses(search = "") {
   const result = await httpsCallable(functions, "listLicenses")({ search });
   return (result.data as { licenses: LicenseSummary[] }).licenses;

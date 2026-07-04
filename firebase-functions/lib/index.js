@@ -212,10 +212,57 @@ function licenseEmailContent({ licenseCode, plan, maxDevices, recipientName }) {
     ].join("");
     return { subject, text, html };
 }
-async function sendResendEmail({ to, subject, text, html, licenseCode, licenseId, type, requestedByUid }) {
+function normalizePublicLicensePlan(value) {
+    const raw = (asString(value) || "").toLowerCase();
+    if (raw.includes("lab")) {
+        return "lab";
+    }
+    if (raw.includes("pro")) {
+        return "pro";
+    }
+    if (raw.includes("friend")) {
+        return "friend";
+    }
+    return "personal";
+}
+function licenseRequestEmailContent({ requestId, name, email, plan, requestedPlanLabel, devices, message }) {
+    const subject = `[Brainok License Request] ${requestedPlanLabel} - ${email}`;
+    const text = [
+        "Brainok License Request",
+        "",
+        `Request ID: ${requestId}`,
+        `Name: ${name || ""}`,
+        `Email: ${email}`,
+        `Plan: ${requestedPlanLabel}`,
+        `Plan key: ${plan}`,
+        `Macs: ${devices}`,
+        "",
+        "Message:",
+        message || "",
+        "",
+        "Next step:",
+        "Open Account > Brainok Licenses, confirm payment/request, then Create License with this buyer email."
+    ].join("\n");
+    const html = [
+        "<h1>Brainok License Request</h1>",
+        "<ul>",
+        `<li><strong>Request ID:</strong> ${htmlEscape(requestId)}</li>`,
+        `<li><strong>Name:</strong> ${htmlEscape(name || "")}</li>`,
+        `<li><strong>Email:</strong> ${htmlEscape(email)}</li>`,
+        `<li><strong>Plan:</strong> ${htmlEscape(requestedPlanLabel)}</li>`,
+        `<li><strong>Plan key:</strong> ${htmlEscape(plan)}</li>`,
+        `<li><strong>Macs:</strong> ${devices}</li>`,
+        "</ul>",
+        "<p><strong>Message:</strong></p>",
+        `<p>${htmlEscape(message || "").replace(/\n/g, "<br>")}</p>`,
+        "<p>Next step: open Account &gt; Brainok Licenses, confirm payment/request, then Create License with this buyer email.</p>"
+    ].join("");
+    return { subject, text, html };
+}
+async function sendResendEmail({ to, subject, text, html, licenseCode, licenseId, requestId, replyToEmail, type, requestedByUid }) {
     const mailLogRef = db.collection("mailLogs").doc();
     const from = resendFromEmail();
-    const replyTo = resendReplyToEmail();
+    const replyTo = replyToEmail || resendReplyToEmail();
     await mailLogRef.set(compactMap({
         mailLogId: mailLogRef.id,
         type,
@@ -226,8 +273,9 @@ async function sendResendEmail({ to, subject, text, html, licenseCode, licenseId
         from,
         replyTo,
         subject,
-        licenseCode,
+        licenseCode: licenseCode || undefined,
         licenseId: licenseId || undefined,
+        requestId: requestId || undefined,
         requestedByUid: requestedByUid || undefined,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
@@ -1104,6 +1152,83 @@ export const listMyActivationCodes = onCall({ region }, async (request) => {
         .sort((left, right) => right.createdAtMillis - left.createdAtMillis)
         .map(({ createdAtMillis: _createdAtMillis, ...activationCode }) => activationCode);
     return { activationCodes };
+});
+export const requestBrainokLicense = onCall({ region, secrets: [resendApiKey] }, async (request) => {
+    const data = (request.data || {});
+    const email = asString(data.email);
+    const emailLowerValue = emailLower(email);
+    if (!email || !emailLowerValue || !email.includes("@")) {
+        throw new HttpsError("invalid-argument", "A valid email address is required.");
+    }
+    const plan = normalizePublicLicensePlan(data.plan);
+    const requestedPlanLabel = boundedString(data.plan, plan, 80);
+    const devices = licenseDeviceLimit(plan, asNumber(data.devices));
+    const name = textField(data.name, "", 120).trim() || null;
+    const message = textField(data.message, "", 1200).trim() || null;
+    const language = oneOf(data.language, ["ko", "en"], "en");
+    const requestRef = db.collection("licenseRequests").doc();
+    await requestRef.set(compactMap({
+        requestId: requestRef.id,
+        name,
+        email,
+        emailLower: emailLowerValue,
+        plan,
+        requestedPlanLabel,
+        devices,
+        message,
+        language,
+        status: "pending",
+        source: "web",
+        emailNotificationStatus: "pending",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+    }));
+    try {
+        const content = licenseRequestEmailContent({
+            requestId: requestRef.id,
+            name,
+            email,
+            plan,
+            requestedPlanLabel,
+            devices,
+            message
+        });
+        const emailResult = await sendResendEmail({
+            to: adminEmail,
+            ...content,
+            requestId: requestRef.id,
+            replyToEmail: email,
+            type: "license_request"
+        });
+        await requestRef.set({
+            emailNotificationStatus: "sent",
+            mailLogId: emailResult.mailLogId,
+            providerMessageId: emailResult.emailId || null,
+            emailedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        return {
+            ok: true,
+            requestId: requestRef.id,
+            emailNotificationStatus: "sent",
+            mailLogId: emailResult.mailLogId
+        };
+    }
+    catch (error) {
+        const messageText = error instanceof Error ? error.message : "Could not send license request email.";
+        console.error("Could not send Brainok license request email.", error);
+        await requestRef.set({
+            emailNotificationStatus: "failed",
+            emailNotificationError: messageText.slice(0, 500),
+            updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        return {
+            ok: true,
+            requestId: requestRef.id,
+            emailNotificationStatus: "failed",
+            errorMessage: messageText
+        };
+    }
 });
 export const createLicense = onCall({ region, secrets: [resendApiKey] }, async (request) => {
     const uid = requireUid(request);
