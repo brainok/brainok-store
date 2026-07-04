@@ -195,8 +195,8 @@ const UI_TEXT = {
     subscriptionPage: {
       eyebrow: "Brainok 라이선스",
       title: "하나의 라이선스. 모든 Brainok 앱.",
-      intro: "Brainok 앱은 누구나 무료로 다운로드하고 30일 동안 모든 기능을 체험할 수 있습니다. 유료 라이선스와 자동 발급은 Toss Pay 연동 후 열 예정입니다.",
-      primaryCta: "라이선스 준비 중",
+      intro: "Brainok 앱은 누구나 무료로 다운로드하고 30일 동안 모든 기능을 체험할 수 있습니다. 라이선스는 현재 수동 결제 확인 후 관리자가 발급하고, Resend 이메일로 activation code를 보내드립니다.",
+      primaryCta: "라이선스 요청",
       freeTitle: "무료 다운로드",
       freeBullets: ["계정 필요 없음", "30일 전체 기능 체험", "원하는 앱을 바로 다운로드"],
       oneTitle: "하나의 라이선스",
@@ -207,22 +207,22 @@ const UI_TEXT = {
       personalTitle: "Personal License",
       personalPrice: "Mac 3대",
       personalCopy: "개인 사용자를 위한 기본 라이선스입니다.",
-      personalCta: "준비 중",
+      personalCta: "Personal 요청",
       proTitle: "Pro License",
       proPrice: "Mac 5대",
       proCopy: "여러 Mac을 오가며 쓰는 사용자에게 적합합니다.",
-      proCta: "준비 중",
+      proCta: "Pro 요청",
       labTitle: "Lab License",
       labPrice: "Mac 20대 이상",
       labCopy: "연구실, 진료실, 기관처럼 여러 컴퓨터에서 함께 사용할 때 적합합니다.",
-      labCta: "준비 중",
+      labCta: "Lab 요청",
       formTitle: "Brainok 라이선스 받기",
-      formIntro: "아래 내용을 보내면 관리자에게 이메일이 작성됩니다. 현재는 자동 결제가 아니라 관리자 확인 후 라이선스 코드를 발급하는 방식입니다.",
+      formIntro: "아래 내용을 보내면 관리자에게 이메일이 작성됩니다. 현재는 자동 결제 대신 관리자 확인 후 라이선스를 발급하고, activation code를 이메일로 보내는 방식입니다.",
       processTitle: "현재 발급 흐름",
       processSteps: [
         "구매자/사용자가 이 요청을 보내면 메일 앱이 열리고 admin에게 요청 메일이 갑니다.",
         "admin은 결제와 요청 내용을 확인한 뒤 Account > Brainok Licenses에서 새 Brainok License code를 생성합니다.",
-        "admin이 생성된 코드를 구매자에게 이메일로 보내면, 구매자는 DMG 앱 안의 라이선스 입력 화면에 그 코드를 붙여 넣습니다.",
+        "시스템이 생성된 코드를 Resend 이메일로 보내면, 구매자는 DMG 앱 안의 라이선스 입력 화면에 그 코드를 붙여 넣습니다.",
         "앱은 Firebase의 activateBrainokLicense에 코드를 확인하고, 해당 기기를 라이선스에 등록합니다.",
         "성공 후 앱은 활성화 정보를 로컬에 저장해 오프라인에서도 계속 사용할 수 있습니다."
       ],
@@ -373,8 +373,8 @@ const UI_TEXT = {
     subscriptionPage: {
       eyebrow: "Brainok License",
       title: "One License. Every Brainok App.",
-      intro: "Download any Brainok app for free and enjoy a full 30-day trial. Paid licenses and automatic delivery will open later with Toss Pay integration.",
-      primaryCta: "License Coming Soon",
+      intro: "Download any Brainok app for free and enjoy a full 30-day trial. Licenses are currently issued after manual payment confirmation, then delivered by Resend email as an activation code.",
+      primaryCta: "Request License",
       freeTitle: "Free Download",
       freeBullets: ["No account required", "30-day trial", "Download any app instantly"],
       oneTitle: "One License",
@@ -385,22 +385,22 @@ const UI_TEXT = {
       personalTitle: "Personal License",
       personalPrice: "3 Macs",
       personalCopy: "Ideal for personal use.",
-      personalCta: "Coming Soon",
+      personalCta: "Request Personal",
       proTitle: "Pro License",
       proPrice: "5 Macs",
       proCopy: "For power users.",
-      proCta: "Coming Soon",
+      proCta: "Request Pro",
       labTitle: "Lab License",
       labPrice: "20+ Macs",
       labCopy: "For research labs and organizations.",
-      labCta: "Coming Soon",
+      labCta: "Request Lab",
       formTitle: "Get Brainok License",
-      formIntro: "This opens an email request to the admin. Automatic checkout-to-license delivery is not connected yet.",
+      formIntro: "This opens an email request to the admin. Today, the admin confirms payment, creates the license, and the activation code is delivered by Resend email.",
       processTitle: "Current issuing flow",
       processSteps: [
         "The buyer sends this request, which opens an email to the admin.",
         "The admin confirms the payment and request, then creates a new Brainok License code in Account > Brainok Licenses.",
-        "The admin emails that generated code to the buyer, and the buyer pastes it into the license screen inside the DMG app.",
+        "The system sends that generated code by Resend email, and the buyer pastes it into the license screen inside the DMG app.",
         "The app verifies the code through Firebase activateBrainokLicense and registers that device to the license.",
         "After activation succeeds, the app stores the local activation record and can keep working offline."
       ],
@@ -735,6 +735,7 @@ function SubscriptionView({
   text: UiText;
 }) {
   const [selectedSupportAppId, setSelectedSupportAppId] = useState<string | null>(null);
+  const [licenseRequestPlan, setLicenseRequestPlan] = useState<string | null>(null);
   const supportApps = useMemo(
     () => sortAppsForDisplay(apps.filter((app) => app.status === "active")),
     [apps]
@@ -776,7 +777,7 @@ function SubscriptionView({
         <span className="mini-label">{text.subscriptionPage.eyebrow}</span>
         <h2>{text.subscriptionPage.title}</h2>
         <p>{text.subscriptionPage.intro}</p>
-        <button className="button primary large" type="button" disabled>
+        <button className="button primary large" type="button" onClick={() => setLicenseRequestPlan(text.subscriptionPage.personalTitle)}>
           <KeyRound size={18} />
           {text.subscriptionPage.primaryCta}
         </button>
@@ -796,7 +797,7 @@ function SubscriptionView({
             price={text.subscriptionPage.personalPrice}
             features={[text.subscriptionPage.personalCopy]}
             action={(
-              <button className="button primary full" type="button" disabled>
+              <button className="button primary full" type="button" onClick={() => setLicenseRequestPlan(text.subscriptionPage.personalTitle)}>
                 {text.subscriptionPage.personalCta}
               </button>
             )}
@@ -806,7 +807,7 @@ function SubscriptionView({
             price={text.subscriptionPage.proPrice}
             features={[text.subscriptionPage.proCopy]}
             action={(
-              <button className="button primary full" type="button" disabled>
+              <button className="button primary full" type="button" onClick={() => setLicenseRequestPlan(text.subscriptionPage.proTitle)}>
                 {text.subscriptionPage.proCta}
               </button>
             )}
@@ -816,7 +817,7 @@ function SubscriptionView({
             price={text.subscriptionPage.labPrice}
             features={[text.subscriptionPage.labCopy]}
             action={(
-              <button className="button secondary full" type="button" disabled>
+              <button className="button secondary full" type="button" onClick={() => setLicenseRequestPlan(text.subscriptionPage.labTitle)}>
                 {text.subscriptionPage.labCta}
               </button>
             )}
@@ -824,6 +825,14 @@ function SubscriptionView({
         </div>
       </section>
 
+      {licenseRequestPlan ? (
+        <LicenseRequestDialog
+          defaultPlan={licenseRequestPlan}
+          language={language}
+          text={text}
+          onClose={() => setLicenseRequestPlan(null)}
+        />
+      ) : null}
     </section>
   );
 }
