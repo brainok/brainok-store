@@ -28,7 +28,7 @@ These must continue working.
 ## Current Constraints
 
 - Payment/license issuing is manual.
-- Older Lemon Squeezy concepts still exist in code and docs.
+- PaymentProvider keeps payment code separate from the licensing system.
 - Device limits are partly represented in code defaults.
 - Activation records currently include app metadata, but the long-term model should count one device once across all apps.
 - Support workflow exists through email and app QnA, but not yet as a complete support ticket platform.

@@ -20,6 +20,7 @@ import {
   Image as ImageIcon,
   KeyRound,
   LogOut,
+  Mail,
   Maximize2,
   Package,
   PlayCircle,
@@ -54,7 +55,9 @@ import {
   ensureUserProfile,
   getAppFromServer,
   listLicenses,
+  resendLicenseEmail,
   resetLicenseDevice,
+  sendTestLicenseEmail,
   updateSiteSettings,
   updateApp,
   uploadAppReleaseFile,
@@ -2496,8 +2499,8 @@ function AccountView({
                         </select>
                       </label>
                       <label className="wide-field">
-                        Lemon checkout URL
-                        <input value={appDraft.checkoutUrl} onChange={(event) => setAppDraft({ ...appDraft, checkoutUrl: event.target.value })} placeholder="https://brainokstore.lemonsqueezy.com/checkout/..." />
+                        Payment checkout URL
+                        <input value={appDraft.checkoutUrl} onChange={(event) => setAppDraft({ ...appDraft, checkoutUrl: event.target.value })} placeholder="https://payments.example.com/checkout/..." />
                       </label>
                     </>
                   ) : null}
@@ -2554,6 +2557,7 @@ const FRIEND_SEVERANCE_CODE = "BRAINOK-SEVERANCE-2026";
 function LicenseAdminPanel({ onError }: { onError: (message: string | null) => void }) {
   const [licenses, setLicenses] = useState<LicenseSummary[]>([]);
   const [search, setSearch] = useState("");
+  const [buyerName, setBuyerName] = useState("");
   const [email, setEmail] = useState("");
   const [plan, setPlan] = useState<BrainokLicensePlan>("personal");
   const [licenseCode, setLicenseCode] = useState("");
@@ -2599,12 +2603,19 @@ function LicenseAdminPanel({ onError }: { onError: (message: string | null) => v
       onError(null);
       setPanelError(null);
       const created = await createLicense({
+        buyerName: buyerName.trim(),
         email: email.trim(),
         plan,
         licenseCode: licenseCode.trim(),
         maxDevices: Number(maxDevices)
       });
-      setStatus(`Created ${created.licenseCode}`);
+      if (created.emailDelivery?.status === "sent") {
+        setStatus(`Created ${created.licenseCode} and sent license email to ${created.emailDelivery.to}`);
+      } else if (created.emailDelivery?.status === "failed") {
+        setStatus(`Created ${created.licenseCode}, but email failed. Use Resend email after checking Resend settings.`);
+      } else {
+        setStatus(`Created ${created.licenseCode}`);
+      }
       setSearch(created.licenseCode);
       await refreshLicenses(created.licenseCode);
     } catch (error) {
@@ -2653,6 +2664,43 @@ function LicenseAdminPanel({ onError }: { onError: (message: string | null) => v
     }
   }
 
+  async function resendEmail(code: string) {
+    try {
+      setBusy(true);
+      setStatus("Sending license email...");
+      onError(null);
+      setPanelError(null);
+      const result = await resendLicenseEmail(code);
+      setStatus(`Sent license email to ${result.to}`);
+      await refreshLicenses();
+    } catch (error) {
+      const message = licenseAdminErrorMessage(error, "Could not send license email.");
+      setStatus(null);
+      setPanelError(message);
+      onError(message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendTestEmail() {
+    try {
+      setBusy(true);
+      setStatus("Sending test email...");
+      onError(null);
+      setPanelError(null);
+      const result = await sendTestLicenseEmail();
+      setStatus(`Sent test license email to ${result.to}`);
+    } catch (error) {
+      const message = licenseAdminErrorMessage(error, "Could not send test license email.");
+      setStatus(null);
+      setPanelError(message);
+      onError(message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="account-panel license-admin-panel">
       <div className="account-heading">
@@ -2663,7 +2711,7 @@ function LicenseAdminPanel({ onError }: { onError: (message: string | null) => v
         One Brainok license unlocks PageWheel, Clipboard, Hotkey Launcher, and future Brainok apps after the 30-day trial.
       </p>
       <p className="activation-note">
-        Current process: after a buyer pays, generate a license here, copy the code, and send it to the buyer by email. Automatic purchase-to-license email delivery is not connected yet.
+        Current process: confirm payment manually, create the license here, and Resend will email the activation code when a buyer email is provided. Toss can later call the same license issuer after payment succeeds.
       </p>
 
       <div className="license-admin-grid">
@@ -2671,8 +2719,12 @@ function LicenseAdminPanel({ onError }: { onError: (message: string | null) => v
           <h3>Generate license</h3>
           <div className="editor-grid compact-editor-grid">
             <label>
+              Name
+              <input value={buyerName} onChange={(event) => setBuyerName(event.target.value)} placeholder="Supporter name" />
+            </label>
+            <label>
               Buyer email
-              <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="optional@example.com" />
+              <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="buyer@example.com" />
             </label>
             <label>
               Plan
@@ -2695,7 +2747,11 @@ function LicenseAdminPanel({ onError }: { onError: (message: string | null) => v
           </div>
           <button className="button primary full" disabled={busy} onClick={() => void createNewLicense()}>
             <KeyRound size={18} />
-            {busy ? "Working..." : "Generate license"}
+            {busy ? "Working..." : "Create License"}
+          </button>
+          <button className="button secondary full" disabled={busy} onClick={() => void sendTestEmail()}>
+            <Mail size={18} />
+            Send test email
           </button>
           {status ? <p className="success-text">{status}</p> : null}
           {panelError ? <p className="error-text inline-error">{panelError}</p> : null}
@@ -2721,12 +2777,19 @@ function LicenseAdminPanel({ onError }: { onError: (message: string | null) => v
               <div>
                 <span className="mini-label">{license.plan.replace("_", " ")}</span>
                 <code>{license.licenseCode}</code>
-                <small>{license.email || "No email"} · {license.activationCount}/{license.maxDevices} devices · {license.status}</small>
+                <small>{license.buyerName || "No name"} · {license.email || "No email"} · {license.activationCount}/{license.maxDevices} devices · {license.status}</small>
+                <small>{license.emailDeliveryStatus ? `Email: ${license.emailDeliveryStatus}${license.lastEmailTo ? ` to ${license.lastEmailTo}` : ""}` : "Email: not sent"}</small>
               </div>
-              <button className="button secondary" disabled={busy || license.status === "disabled"} onClick={() => void disableSelectedLicense(license.licenseCode)}>
-                <X size={18} />
-                Disable
-              </button>
+              <div className="inline-actions">
+                <button className="button secondary" disabled={busy || license.status === "disabled"} onClick={() => void resendEmail(license.licenseCode)}>
+                  <Mail size={18} />
+                  Resend email
+                </button>
+                <button className="button secondary" disabled={busy || license.status === "disabled"} onClick={() => void disableSelectedLicense(license.licenseCode)}>
+                  <X size={18} />
+                  Disable
+                </button>
+              </div>
             </div>
             <div className="license-activation-list">
               {license.activations.length > 0 ? license.activations.map((activation) => (

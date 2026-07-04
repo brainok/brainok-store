@@ -34,7 +34,7 @@ service cloud.firestore {
         && request.resource.data.uid == uid
         && request.resource.data.planType == 'free'
         && request.resource.data.licenseStatus in ['free', 'inactive']
-        && request.resource.data.subscriptionProvider == null;
+        && request.resource.data.paymentProvider == null;
 
       allow update: if isOwner(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(userEditableKeys());
@@ -79,6 +79,10 @@ service cloud.firestore {
     }
 
     match /activations/{activationId} {
+      allow read, write: if false;
+    }
+
+    match /mailLogs/{mailLogId} {
       allow read, write: if false;
     }
 

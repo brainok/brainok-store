@@ -156,7 +156,7 @@ Tasks:
 - Add provider enum:
   - `manual`
   - `toss`
-  - `legacy_lemonsqueezy`
+  - `legacy_external`
 - Add server-created orders.
 - Add Toss checkout flow.
 - Add payment confirmation function.
@@ -210,7 +210,7 @@ Only after all supported apps have migrated:
 
 - mark old app-specific activation paths as legacy
 - keep read/verify support for old signed codes
-- remove unused Lemon Squeezy UI labels if Toss is live
+- keep payment-provider UI labels generic
 - keep historical payment records
 - keep compatibility code documents
 

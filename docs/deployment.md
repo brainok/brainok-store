@@ -117,8 +117,20 @@ Open Chrome DevTools with `F12`, then check Console. The most common messages ar
    npx firebase functions:secrets:set QNA_SMTP_PASSWORD
    ```
 
-9. Add QnA SMTP settings to `firebase-functions/.env`.
-10. Deploy functions:
+9. Set the Resend API key secret for license email delivery tests:
+
+   ```bash
+   npx firebase functions:secrets:set RESEND_API_KEY
+   ```
+
+10. Add QnA SMTP settings to `firebase-functions/.env`. Optionally add `RESEND_FROM_EMAIL="Brainok Licensing <licenses@brainok.net>"` and `RESEND_REPLY_TO_EMAIL=brainok777@gmail.com` after verifying the Brainok sending domain in Resend.
+11. Test Resend license delivery locally. This command sends only to `brainok777@gmail.com`:
+
+   ```bash
+   RESEND_API_KEY=... npm run test:license-email
+   ```
+
+12. Deploy functions:
 
    ```bash
    npm run deploy:functions

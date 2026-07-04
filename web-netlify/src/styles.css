@@ -1612,6 +1612,13 @@ select {
   align-items: center;
 }
 
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .license-card code {
   display: block;
   margin: 6px 0;

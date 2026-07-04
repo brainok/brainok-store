@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import {
   DocumentSnapshot,
   FieldValue,
@@ -20,20 +21,10 @@ initializeApp();
 const db = getFirestore();
 const auth = getAuth();
 const region = process.env.FUNCTION_REGION || "asia-northeast3";
-const lemonSqueezyWebhookSecret = defineSecret("LEMONSQUEEZY_WEBHOOK_SECRET");
 const qnaSmtpPassword = defineSecret("QNA_SMTP_PASSWORD");
+const resendApiKey = defineSecret("RESEND_API_KEY");
 const adminEmail = "brainok777@gmail.com";
-
-type LicenseStatus =
-  | "free"
-  | "inactive"
-  | "active"
-  | "on_trial"
-  | "past_due"
-  | "paused"
-  | "cancelled"
-  | "expired"
-  | "refunded";
+const defaultLicenseFromEmail = "Brainok Licensing <licenses@brainok.net>";
 
 type InviteBenefit = "beta_access";
 type AccountRole = "admin" | "user";
@@ -45,6 +36,44 @@ type AppBillingInterval = "one_time" | "monthly" | "yearly" | "pay_what_you_want
 type ActivationStatus = "not_found" | "trial" | "active" | "expired" | "revoked";
 type BrainokLicensePlan = "personal" | "pro" | "lab" | "friend";
 type BrainokLicenseStatus = "active" | "disabled" | "expired";
+type PaymentProviderId = "manual" | "toss" | "legacy_external";
+type PaymentStatus =
+  | "created"
+  | "pending"
+  | "paid"
+  | "paid_needs_license"
+  | "refunded"
+  | "partially_refunded"
+  | "failed"
+  | "cancelled";
+
+interface PaymentProvider {
+  id: PaymentProviderId;
+  displayName: string;
+  supportsCheckout: boolean;
+  supportsWebhooks: boolean;
+}
+
+const paymentProviders: Record<PaymentProviderId, PaymentProvider> = {
+  manual: {
+    id: "manual",
+    displayName: "Manual",
+    supportsCheckout: false,
+    supportsWebhooks: false
+  },
+  toss: {
+    id: "toss",
+    displayName: "Toss Payments",
+    supportsCheckout: false,
+    supportsWebhooks: true
+  },
+  legacy_external: {
+    id: "legacy_external",
+    displayName: "Legacy payment import",
+    supportsCheckout: false,
+    supportsWebhooks: false
+  }
+};
 
 const trialLengthMs = 30 * 24 * 60 * 60 * 1000;
 
@@ -81,18 +110,6 @@ const defaultSiteSettings = {
     }
   ]
 };
-
-interface LemonPayload {
-  meta?: {
-    event_name?: string;
-    custom_data?: Record<string, unknown>;
-  };
-  data?: {
-    type?: string;
-    id?: string;
-    attributes?: Record<string, unknown>;
-  };
-}
 
 function requireUid(request: { auth?: { uid?: string } }): string {
   const uid = request.auth?.uid;
@@ -210,6 +227,194 @@ function htmlEscape(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function secretOrEnv(secret: ReturnType<typeof defineSecret>, envName: string): string | undefined {
+  try {
+    return secret.value() || process.env[envName];
+  } catch {
+    return process.env[envName];
+  }
+}
+
+function resendFromEmail(): string {
+  return process.env.RESEND_FROM_EMAIL || defaultLicenseFromEmail;
+}
+
+function resendReplyToEmail(): string {
+  return process.env.RESEND_REPLY_TO_EMAIL || adminEmail;
+}
+
+function testLicenseCode(): string {
+  const raw = crypto.randomBytes(4).toString("hex").toUpperCase();
+  return `BRAINOK-TEST-${raw.slice(0, 4)}-${raw.slice(4, 8)}`;
+}
+
+function licenseEmailContent({
+  licenseCode,
+  plan,
+  maxDevices,
+  recipientName
+}: {
+  licenseCode: string;
+  plan: BrainokLicensePlan;
+  maxDevices: number;
+  recipientName?: string | null;
+}) {
+  const subject = "Your Brainok License";
+  const greeting = recipientName ? `Hello ${recipientName},` : "Hello,";
+  const text = [
+    greeting,
+    "",
+    "Thank you for supporting Brainok.",
+    "Your activation code:",
+    licenseCode,
+    "",
+    `Plan: ${plan}`,
+    `Device limit: ${maxDevices}`,
+    "",
+    "Download any Brainok app for free, use the 30-day trial, then enter this license code inside the app.",
+    "Activation requires Internet once. After activation, the app can keep working offline.",
+    "",
+    `Support: ${adminEmail}`
+  ].join("\n");
+  const html = [
+    `<p>${htmlEscape(greeting)}</p>`,
+    "<p>Thank you for supporting Brainok.</p>",
+    "<h1>Your Brainok License</h1>",
+    "<p>Use this license code inside any Brainok app after the 30-day trial.</p>",
+    "<p><strong>Your activation code:</strong></p>",
+    `<p><code>${htmlEscape(licenseCode)}</code></p>`,
+    "<ul>",
+    `<li>Plan: ${htmlEscape(plan)}</li>`,
+    `<li>Device limit: ${maxDevices}</li>`,
+    "<li>Activation requires Internet once.</li>",
+    "<li>After activation, Brainok apps can keep working offline.</li>",
+    "</ul>",
+    `<p>Support: <a href="mailto:${adminEmail}">${adminEmail}</a></p>`
+  ].join("");
+
+  return { subject, text, html };
+}
+
+async function sendResendEmail({
+  to,
+  subject,
+  text,
+  html,
+  licenseCode,
+  licenseId,
+  type,
+  requestedByUid
+}: {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+  licenseCode: string;
+  licenseId?: string | null;
+  type: "license_delivery" | "license_resend" | "license_test";
+  requestedByUid?: string | null;
+}): Promise<{ emailId: string | null; mailLogId: string }> {
+  const mailLogRef = db.collection("mailLogs").doc();
+  const from = resendFromEmail();
+  const replyTo = resendReplyToEmail();
+
+  await mailLogRef.set(compactMap({
+    mailLogId: mailLogRef.id,
+    type,
+    status: "sending",
+    provider: "resend",
+    to,
+    toLower: emailLower(to),
+    from,
+    replyTo,
+    subject,
+    licenseCode,
+    licenseId: licenseId || undefined,
+    requestedByUid: requestedByUid || undefined,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp()
+  }));
+
+  const apiKey = secretOrEnv(resendApiKey, "RESEND_API_KEY");
+  if (!apiKey) {
+    await mailLogRef.set(
+      {
+        status: "failed",
+        errorMessage: "RESEND_API_KEY is not configured.",
+        failedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
+    throw new HttpsError(
+      "failed-precondition",
+      "RESEND_API_KEY is not configured. Set it with Firebase Secret Manager or a local environment variable."
+    );
+  }
+
+  const resend = new Resend(apiKey);
+  const result = await resend.emails.send({
+    from,
+    to: [to],
+    replyTo,
+    subject,
+    text,
+    html
+  });
+
+  if (result.error) {
+    await mailLogRef.set(
+      {
+        status: "failed",
+        errorMessage: result.error.message || "Resend could not send the email.",
+        failedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
+    throw new HttpsError(
+      "internal",
+      result.error.message || "Resend could not send the license email."
+    );
+  }
+
+  const emailId = result.data?.id || null;
+  await mailLogRef.set(
+    compactMap({
+      status: "sent",
+      providerMessageId: emailId || undefined,
+      sentAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    }),
+    { merge: true }
+  );
+
+  return { emailId, mailLogId: mailLogRef.id };
+}
+
+async function sendResendTestLicenseEmail(requestedByUid?: string | null): Promise<{ emailId: string | null; mailLogId: string; licenseCode: string }> {
+  const licenseCode = testLicenseCode();
+  const content = licenseEmailContent({
+    licenseCode,
+    plan: "personal",
+    maxDevices: 3
+  });
+  const result = await sendResendEmail({
+    to: adminEmail,
+    ...content,
+    subject: "Brainok Store test license email",
+    licenseCode,
+    licenseId: null,
+    type: "license_test",
+    requestedByUid
+  });
+
+  return {
+    ...result,
+    licenseCode
+  };
+}
+
 async function notifyAdminOfAppQuestion({
   questionId,
   appId,
@@ -310,344 +515,113 @@ function sha256(input: string | Buffer): string {
   return crypto.createHash("sha256").update(input).digest("hex");
 }
 
-function verifyLemonSignature(
-  rawBody: Buffer | undefined,
-  signatureHeader: string | undefined,
-  secret: string
-): boolean {
-  if (!rawBody || !signatureHeader || !secret) {
-    return false;
-  }
-
-  const expected = Buffer.from(
-    crypto.createHmac("sha256", secret).update(rawBody).digest("hex"),
-    "utf8"
+function paymentProvider(value: unknown): PaymentProvider {
+  const id = oneOf<PaymentProviderId>(
+    value,
+    ["manual", "toss", "legacy_external"],
+    "manual"
   );
-  const actual = Buffer.from(signatureHeader, "utf8");
-
-  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+  return paymentProviders[id];
 }
 
-function payloadAttributes(payload: LemonPayload): Record<string, unknown> {
-  return payload.data?.attributes || {};
-}
-
-function payloadUid(payload: LemonPayload): string | undefined {
-  const custom = payload.meta?.custom_data || {};
-  return asString(custom.uid) || asString(custom.user_id);
-}
-
-function payloadEmail(payload: LemonPayload): string | undefined {
-  return asString(payloadAttributes(payload).user_email);
-}
-
-function payloadCustomData(payload: LemonPayload): Record<string, unknown> {
-  return payload.meta?.custom_data || {};
-}
-
-async function resolveUserRef(payload: LemonPayload) {
-  const uid = payloadUid(payload);
-  if (uid) {
-    return db.collection("users").doc(uid);
-  }
-
-  const email = emailLower(payloadEmail(payload));
-  if (!email) {
-    return null;
-  }
-
-  const existing = await db
-    .collection("users")
-    .where("emailLower", "==", email)
-    .limit(1)
-    .get();
-
-  if (!existing.empty) {
-    return existing.docs[0].ref;
-  }
-
-  try {
-    const user = await auth.getUserByEmail(email);
-    return db.collection("users").doc(user.uid);
-  } catch {
-    return null;
-  }
-}
-
-function mapSubscriptionStatus(eventName: string, rawStatus?: string): LicenseStatus {
-  if (eventName === "order_refunded" || eventName === "subscription_payment_refunded") {
-    return "refunded";
-  }
-
-  if (eventName === "subscription_expired") {
-    return "expired";
-  }
-
-  if (eventName === "subscription_cancelled") {
-    return "cancelled";
-  }
-
-  if (eventName === "subscription_paused") {
-    return "paused";
-  }
-
-  if (rawStatus === "active") {
-    return "active";
-  }
-
-  if (rawStatus === "on_trial") {
-    return "on_trial";
-  }
-
-  if (rawStatus === "past_due") {
-    return "past_due";
-  }
-
-  if (rawStatus === "paused") {
-    return "paused";
-  }
-
-  if (rawStatus === "cancelled") {
-    return "cancelled";
-  }
-
-  if (rawStatus === "expired") {
-    return "expired";
-  }
-
-  return "inactive";
-}
-
-function hasProAccess(status: LicenseStatus): boolean {
-  return status === "active" || status === "on_trial";
-}
-
-function lemonState(payload: LemonPayload, eventName: string): Record<string, unknown> {
-  const data = payload.data || {};
-  const attrs = payloadAttributes(payload);
-  const dataType = asString(data.type);
-
-  return compactMap({
-    customerId: asString(attrs.customer_id),
-    orderId: asString(attrs.order_id),
-    orderItemId: asString(attrs.order_item_id),
-    productId: asString(attrs.product_id),
-    variantId: asString(attrs.variant_id),
-    subscriptionId:
-      asString(attrs.subscription_id) ||
-      (dataType === "subscriptions" ? asString(data.id) : undefined),
-    invoiceId: dataType === "subscription-invoices" ? asString(data.id) : undefined,
-    status: asString(attrs.status),
-    renewsAt: asString(attrs.renews_at) || null,
-    endsAt: asString(attrs.ends_at) || null,
-    trialEndsAt: asString(attrs.trial_ends_at) || null,
-    lastEventName: eventName,
-    lastWebhookAt: new Date().toISOString()
-  });
-}
-
-async function writePendingPayment(payload: LemonPayload, eventName: string) {
-  const email = emailLower(payloadEmail(payload));
-  const id = sha256(`${eventName}:${email || "unknown"}:${payload.data?.id || crypto.randomUUID()}`);
-
-  await db.collection("pendingPayments").doc(id).set(
-    {
-      email,
-      eventName,
-      payload,
-      createdAt: FieldValue.serverTimestamp()
-    },
-    { merge: true }
+function paymentStatus(value: unknown): PaymentStatus {
+  return oneOf<PaymentStatus>(
+    value,
+    ["created", "pending", "paid", "paid_needs_license", "refunded", "partially_refunded", "failed", "cancelled"],
+    "pending"
   );
 }
 
-async function applyLemonEvent(payload: LemonPayload, eventName: string) {
-  const customData = payloadCustomData(payload);
-  const purpose = asString(customData.purpose);
-  const appId = asString(customData.appId);
-
-  if (appId && purpose === "app_purchase") {
-    await applyAppPurchaseEvent(payload, eventName);
-    return;
-  }
-
-  if (eventName === "order_created" || eventName === "order_refunded") {
-    await writePendingPayment(payload, eventName);
-    return;
-  }
-
-  const userRef = await resolveUserRef(payload);
-  if (!userRef) {
-    await writePendingPayment(payload, eventName);
-    return;
-  }
-
-  const attrs = payloadAttributes(payload);
-  const status = mapSubscriptionStatus(eventName, asString(attrs.status));
-  const proAccess = hasProAccess(status);
-  const email = payloadEmail(payload) || null;
-
-  const userUpdate = compactMap({
-    email,
-    emailLower: email ? emailLower(email) : undefined,
-    planType: proAccess ? "pro" : "free",
-    licenseStatus: status,
-    inviteQuota: proAccess ? 3 : 0,
-    deviceLimit: proAccess ? 2 : 1,
-    subscriptionProvider: "lemonsqueezy",
-    lemonSqueezy: lemonState(payload, eventName),
-    updatedAt: FieldValue.serverTimestamp()
-  });
-
-  await userRef.set(userUpdate, { merge: true });
-
-  const subscriptionId = asString(userUpdate.lemonSqueezy && (userUpdate.lemonSqueezy as Record<string, unknown>).subscriptionId);
-  if (subscriptionId) {
-    await db.collection("subscriptions").doc(subscriptionId).set(
-      compactMap({
-        uid: userRef.id,
-        provider: "lemonsqueezy",
-        licenseStatus: status,
-        planType: proAccess ? "pro" : "free",
-        lemonSqueezy: lemonState(payload, eventName),
-        updatedAt: FieldValue.serverTimestamp()
-      }),
-      { merge: true }
-    );
-  }
-}
-
-async function applyAppPurchaseEvent(payload: LemonPayload, eventName: string) {
-  const userRef = await resolveUserRef(payload);
-  if (!userRef) {
-    await writePendingPayment(payload, eventName);
-    return;
-  }
-
-  const customData = payloadCustomData(payload);
-  const appId = asString(customData.appId);
-  if (!appId) {
-    await writePendingPayment(payload, eventName);
-    return;
-  }
-
-  const appRef = db.collection("apps").doc(appId);
-  const appSnap = await appRef.get();
-  if (!appSnap.exists) {
-    await writePendingPayment(payload, eventName);
-    return;
-  }
-
-  const app = appSnap.data() || {};
-  const attrs = payloadAttributes(payload);
-  const rawStatus = asString(attrs.status);
-  const revoked =
-    eventName === "order_refunded" ||
-    eventName === "subscription_cancelled" ||
-    eventName === "subscription_expired" ||
-    eventName === "subscription_payment_refunded" ||
-    rawStatus === "cancelled" ||
-    rawStatus === "expired" ||
-    rawStatus === "refunded";
-  const orderId =
-    asString(payload.data?.id) ||
-    asString(attrs.order_id) ||
-    sha256(JSON.stringify(payload));
-  const email = payloadEmail(payload);
-  const amountCents = asNumber(attrs.total) ?? asNumber(attrs.subtotal);
-  const currency = asString(attrs.currency);
-  const role: AppRole = "user";
-  const accessStatus = revoked ? "revoked" : "active";
-
-  await userRef.set(
+async function writePaymentRecord({
+  provider,
+  status,
+  email,
+  amountCents,
+  currency,
+  orderId,
+  providerPaymentId,
+  rawPayload,
+  licenseId,
+  licenseCode
+}: {
+  provider: PaymentProviderId;
+  status: PaymentStatus;
+  email?: string | null;
+  amountCents?: number;
+  currency?: string;
+  orderId?: string;
+  providerPaymentId?: string;
+  rawPayload?: unknown;
+  licenseId?: string;
+  licenseCode?: string;
+}) {
+  const paymentId = providerPaymentId || orderId || crypto.randomUUID();
+  const paymentRef = db.collection("payments").doc(`${provider}_${paymentId}`);
+  await paymentRef.set(
     compactMap({
-      email: email || undefined,
-      emailLower: email ? emailLower(email) : undefined,
-      accessStatus: revoked ? undefined : "active",
-      planType: "free",
-      licenseStatus: "free",
-      deviceLimit: revoked ? undefined : 5,
-      [`apps.${appId}`]: compactMap({
-        appId,
-        name: asString(app.name) || appId,
-        role,
-        accessStatus,
-        source: "paid",
-        orderId,
-        activatedAt: revoked ? undefined : FieldValue.serverTimestamp(),
-        revokedAt: revoked ? FieldValue.serverTimestamp() : undefined,
-        lemonSqueezy: lemonState(payload, eventName)
-      }),
-      updatedAt: FieldValue.serverTimestamp()
-    }),
-    { merge: true }
-  );
-
-  await db.collection("purchases").doc(orderId).set(
-    compactMap({
-      uid: userRef.id,
-      appId,
-      appName: asString(app.name) || appId,
-      provider: "lemonsqueezy",
-      eventName,
-      status: accessStatus,
+      paymentId: paymentRef.id,
+      provider,
+      providerPaymentId,
+      orderId,
+      status,
+      email: email || null,
+      emailLower: emailLower(email),
       amountCents,
       currency,
-      email,
-      lemonSqueezy: lemonState(payload, eventName),
-      rawAttributes: attrs,
+      licenseId,
+      licenseCode,
+      rawPayload,
       updatedAt: FieldValue.serverTimestamp(),
       createdAt: FieldValue.serverTimestamp()
     }),
     { merge: true }
   );
+
+  return paymentRef.id;
 }
 
-export const lemonsqueezyWebhook = onRequest(
-  {
-    region,
-    cors: false,
-    secrets: [lemonSqueezyWebhookSecret]
-  },
+export const tossPaymentsWebhook = onRequest(
+  { region, cors: false },
   async (request, response) => {
     if (request.method !== "POST") {
       response.status(405).send("Method not allowed");
       return;
     }
 
-    const signature = request.get("x-signature") || undefined;
-    const valid = verifyLemonSignature(
-      request.rawBody,
-      signature,
-      lemonSqueezyWebhookSecret.value()
-    );
-
-    if (!valid) {
-      response.status(401).send("Invalid signature");
-      return;
-    }
-
-    const payload = request.body as LemonPayload;
+    const payload = (request.body || {}) as Record<string, unknown>;
     const eventName =
-      request.get("x-event-name") || payload.meta?.event_name || "unknown";
-
+      asString(request.get("toss-webhook-event-type")) ||
+      asString(payload.eventType) ||
+      asString(payload.status) ||
+      "unknown";
     const eventId = sha256(request.rawBody || JSON.stringify(payload));
 
     try {
-      await applyLemonEvent(payload, eventName);
       await db.collection("webhookEvents").doc(eventId).set(
         {
+          provider: "toss",
           eventName,
-          dataType: payload.data?.type || null,
-          dataId: payload.data?.id || null,
-          handledAt: FieldValue.serverTimestamp()
+          payload,
+          handledAt: FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp()
         },
         { merge: true }
       );
 
-      response.status(200).json({ ok: true });
+      await writePaymentRecord({
+        provider: "toss",
+        status: paymentStatus(payload.status),
+        email: asString(payload.email) || asString(payload.customerEmail),
+        amountCents: asNumber(payload.amount),
+        currency: asString(payload.currency) || "KRW",
+        orderId: asString(payload.orderId),
+        providerPaymentId: asString(payload.paymentKey) || asString(payload.paymentId),
+        rawPayload: payload
+      });
+
+      response.status(200).json({ ok: true, provider: "toss" });
     } catch (error) {
-      console.error("Payment webhook failed", error);
+      console.error("Toss payment webhook failed", error);
       response.status(500).json({ ok: false });
     }
   }
@@ -696,7 +670,7 @@ export const ensureUserProfile = onCall({ region }, async (request) => {
       accessStatus: "pending",
       inviteQuota: 0,
       deviceLimit: 5,
-      subscriptionProvider: null,
+      paymentProvider: null,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
       lastLoginAt: FieldValue.serverTimestamp()
@@ -709,26 +683,36 @@ export const ensureUserProfile = onCall({ region }, async (request) => {
 export const createCheckout = onCall({ region }, async (request) => {
   const uid = requireUid(request);
   const user = await auth.getUser(uid);
-  const checkoutBase = process.env.LEMONSQUEEZY_CHECKOUT_URL;
+  const data = (request.data || {}) as Record<string, unknown>;
+  const provider = paymentProvider(data.provider);
 
-  if (!checkoutBase) {
+  if (provider.id === "manual") {
+    const subject = encodeURIComponent("Brainok License request");
+    const body = encodeURIComponent([
+      "Brainok License Request",
+      "",
+      `User ID: ${uid}`,
+      `Email: ${user.email || ""}`,
+      `Source: ${asString(data.source) || "web"}`,
+      "",
+      "Requested plan:",
+      "Message:"
+    ].join("\n"));
+
+    return {
+      provider: provider.id,
+      url: `mailto:${adminEmail}?subject=${subject}&body=${body}`
+    };
+  }
+
+  if (provider.id === "toss") {
     throw new HttpsError(
       "failed-precondition",
-      "LEMONSQUEEZY_CHECKOUT_URL is not configured."
+      "Toss Payments checkout is not configured yet. Manual license issuance is available."
     );
   }
 
-  const source = asString((request.data as Record<string, unknown> | undefined)?.source) || "app";
-  const checkoutUrl = new URL(checkoutBase);
-
-  if (user.email) {
-    checkoutUrl.searchParams.set("checkout[email]", user.email);
-  }
-
-  checkoutUrl.searchParams.set("checkout[custom][uid]", uid);
-  checkoutUrl.searchParams.set("checkout[custom][source]", source);
-
-  return { url: checkoutUrl.toString() };
+  throw new HttpsError("failed-precondition", "This payment provider is retained for historical records only.");
 });
 
 export const updateSiteSettings = onCall({ region }, async (request) => {
@@ -935,6 +919,68 @@ function licenseDeviceLimit(plan: BrainokLicensePlan, value: unknown): number {
   const limit = Math.round(asNumber(value) ?? fallback);
   const maximum = plan === "lab" || plan === "friend" ? 100 : 20;
   return Math.min(maximum, Math.max(1, limit));
+}
+
+async function issueBrainokLicense({
+  email,
+  buyerName,
+  plan,
+  licenseCode: requestedLicenseCode,
+  maxDevices: requestedMaxDevices,
+  source,
+  createdByUid,
+  paymentId
+}: {
+  email?: string | null;
+  buyerName?: string | null;
+  plan: BrainokLicensePlan;
+  licenseCode?: string;
+  maxDevices?: number;
+  source: PaymentProviderId;
+  createdByUid?: string | null;
+  paymentId?: string | null;
+}) {
+  const licenseCode = normalizeLicenseCode(requestedLicenseCode) || generateLicenseCode(plan);
+  const licenseId = licenseIdForCode(licenseCode);
+  const normalizedEmail = asString(email) || null;
+  const normalizedBuyerName = asString(buyerName) || null;
+  const maxDevices = licenseDeviceLimit(plan, requestedMaxDevices);
+  const licenseRef = db.collection("licenses").doc(licenseCode);
+  const existing = await licenseRef.get();
+
+  if (existing.exists) {
+    throw new HttpsError("already-exists", "This license code already exists.");
+  }
+
+  await licenseRef.create(compactMap({
+    licenseId,
+    licenseCode,
+    email: normalizedEmail,
+    emailLower: emailLower(normalizedEmail),
+    buyerName: normalizedBuyerName,
+    plan,
+    status: "active" satisfies BrainokLicenseStatus,
+    maxDevices,
+    activationCount: 0,
+    allowedApps: ["*"],
+    source,
+    paymentId: paymentId || undefined,
+    emailDeliveryStatus: normalizedEmail ? "pending" : "skipped",
+    createdByUid: createdByUid || undefined,
+    issuedAt: FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp()
+  }));
+
+  return {
+    licenseId,
+    licenseCode,
+    email: normalizedEmail,
+    buyerName: normalizedBuyerName,
+    plan,
+    status: "active" as const,
+    maxDevices
+  };
 }
 
 function normalizeActivationCode(value: unknown): string | undefined {
@@ -1486,42 +1532,302 @@ export const listMyActivationCodes = onCall({ region }, async (request) => {
   return { activationCodes };
 });
 
-export const createLicense = onCall({ region }, async (request) => {
-  const uid = requireUid(request);
-  await requireSiteAdmin(uid);
+export const createLicense = onCall(
+  { region, secrets: [resendApiKey] },
+  async (request) => {
+    const uid = requireUid(request);
+    await requireSiteAdmin(uid);
 
-  const data = (request.data || {}) as Record<string, unknown>;
-  const plan = normalizePlan(data.plan);
-  const licenseCode = normalizeLicenseCode(data.licenseCode) || generateLicenseCode(plan);
-  const licenseId = licenseIdForCode(licenseCode);
-  const email = asString(data.email) || null;
-  const maxDevices = licenseDeviceLimit(plan, data.maxDevices);
-  const licenseRef = db.collection("licenses").doc(licenseCode);
-  const existing = await licenseRef.get();
+    const data = (request.data || {}) as Record<string, unknown>;
+    const plan = normalizePlan(data.plan);
+    const email = asString(data.email) || null;
+    const buyerName = asString(data.buyerName) || null;
+    const result = await issueBrainokLicense({
+      email,
+      buyerName,
+      plan,
+      licenseCode: asString(data.licenseCode),
+      maxDevices: asNumber(data.maxDevices),
+      source: "manual",
+      createdByUid: uid
+    });
 
-  if (existing.exists) {
-    throw new HttpsError("already-exists", "This license code already exists.");
+    if (!email) {
+      return {
+        ...result,
+        emailDelivery: {
+          status: "skipped" as const,
+          to: null
+        }
+      };
+    }
+
+    const licenseRef = db.collection("licenses").doc(result.licenseCode);
+    try {
+      const content = licenseEmailContent({
+        licenseCode: result.licenseCode,
+        plan: result.plan,
+        maxDevices: result.maxDevices,
+        recipientName: buyerName
+      });
+      const emailResult = await sendResendEmail({
+        to: email,
+        ...content,
+        licenseCode: result.licenseCode,
+        licenseId: result.licenseId,
+        type: "license_delivery",
+        requestedByUid: uid
+      });
+
+      await licenseRef.set(
+        {
+          emailDeliveryStatus: "sent",
+          lastEmailedAt: FieldValue.serverTimestamp(),
+          lastEmailTo: email,
+          lastMailLogId: emailResult.mailLogId,
+          lastEmailError: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
+
+      return {
+        ...result,
+        emailDelivery: {
+          status: "sent" as const,
+          to: email,
+          ...emailResult
+        }
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not send license email.";
+      await licenseRef.set(
+        {
+          emailDeliveryStatus: "failed",
+          lastEmailTo: email,
+          lastEmailError: message.slice(0, 500),
+          updatedAt: FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
+
+      return {
+        ...result,
+        emailDelivery: {
+          status: "failed" as const,
+          to: email,
+          errorMessage: message
+        }
+      };
+    }
+  }
+);
+
+async function licenseSnapFromRequest(data: Record<string, unknown>): Promise<DocumentSnapshot> {
+  const code = normalizeLicenseCode(data.licenseCode || data.code);
+  const licenseId = asString(data.licenseId);
+
+  if (code) {
+    return db.collection("licenses").doc(code).get();
   }
 
-  await licenseRef.create(compactMap({
+  if (licenseId) {
+    const snapshot = await db.collection("licenses")
+      .where("licenseId", "==", licenseId)
+      .limit(1)
+      .get();
+    const licenseDoc = snapshot.docs[0];
+    if (!licenseDoc) {
+      throw new HttpsError("not-found", "License does not exist.");
+    }
+
+    return licenseDoc;
+  }
+
+  throw new HttpsError("invalid-argument", "licenseCode or licenseId is required.");
+}
+
+function licenseEmailAddress(data: Record<string, unknown>, license: Record<string, unknown>): string {
+  const to = asString(data.to) || asString(data.email) || asString(license.email) || adminEmail;
+  const normalized = emailLower(to);
+  if (!to || !normalized || !to.includes("@")) {
+    throw new HttpsError("invalid-argument", "A valid email address is required.");
+  }
+
+  return to;
+}
+
+async function sendStoredLicenseEmail({
+  requestData,
+  requestedByUid,
+  type
+}: {
+  requestData: Record<string, unknown>;
+  requestedByUid: string;
+  type: "license_delivery" | "license_resend";
+}) {
+  const licenseSnap = await licenseSnapFromRequest(requestData);
+  if (!licenseSnap?.exists) {
+    throw new HttpsError("not-found", "License does not exist.");
+  }
+
+  const license = licenseSnap.data() || {};
+  const licenseCode = normalizeLicenseCode(license.licenseCode || licenseSnap.id);
+  if (!licenseCode) {
+    throw new HttpsError("failed-precondition", "License code is invalid.");
+  }
+
+  const status = oneOf<BrainokLicenseStatus>(
+    license.status,
+    ["active", "disabled", "expired"],
+    "active"
+  );
+  if (status !== "active") {
+    throw new HttpsError("failed-precondition", "Only active licenses can be emailed.");
+  }
+
+  const plan = normalizePlan(license.plan);
+  const maxDevices = Math.max(1, Number(license.maxDevices || defaultDeviceLimit(plan)));
+  const to = licenseEmailAddress(requestData, license);
+  const licenseId = asString(license.licenseId) || licenseIdForCode(licenseCode);
+  const content = licenseEmailContent({
+    licenseCode,
+    plan,
+    maxDevices,
+    recipientName: asString(license.buyerName) || null
+  });
+  const result = await sendResendEmail({
+    to,
+    ...content,
+    licenseCode,
+    licenseId,
+    type,
+    requestedByUid
+  });
+
+  await licenseSnap.ref.set(
+    {
+      lastEmailedAt: FieldValue.serverTimestamp(),
+      lastEmailTo: to,
+      lastMailLogId: result.mailLogId,
+      emailDeliveryStatus: "sent",
+      lastEmailError: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp()
+    },
+    { merge: true }
+  );
+
+  return {
+    ok: true,
+    to,
     licenseId,
     licenseCode,
-    email,
-    emailLower: emailLower(email),
-    plan,
-    status: "active" satisfies BrainokLicenseStatus,
-    maxDevices,
-    activationCount: 0,
-    allowedApps: ["*"],
-    source: "manual",
-    createdByUid: uid,
-    issuedAt: FieldValue.serverTimestamp(),
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp()
-  }));
+    ...result
+  };
+}
 
-  return { licenseId, licenseCode, email, plan, status: "active", maxDevices };
+export const verifyLicense = onCall({ region }, async (request) => {
+  const data = (request.data || {}) as Record<string, unknown>;
+  const licenseCode = normalizeLicenseCode(data.licenseCode || data.code);
+  const deviceId = asString(data.deviceId);
+  const appId = asString(data.appId);
+
+  if (!licenseCode) {
+    throw new HttpsError("invalid-argument", "A valid Brainok license code is required.");
+  }
+
+  const licenseSnap = await db.collection("licenses").doc(licenseCode).get();
+  if (!licenseSnap.exists) {
+    return {
+      ok: true,
+      valid: false,
+      status: "not_found",
+      activated: false
+    };
+  }
+
+  const license = licenseSnap.data() || {};
+  const licenseId = asString(license.licenseId) || licenseIdForCode(licenseCode);
+  const plan = normalizePlan(license.plan);
+  const maxDevices = Math.max(1, Number(license.maxDevices || defaultDeviceLimit(plan)));
+  const allowedApps = Array.isArray(license.allowedApps)
+    ? license.allowedApps.filter((value): value is string => typeof value === "string")
+    : ["*"];
+  const appAllowed = !appId || allowedApps.includes("*") || allowedApps.includes(appId);
+  let status = oneOf<BrainokLicenseStatus>(
+    license.status,
+    ["active", "disabled", "expired"],
+    "active"
+  );
+
+  const expiresAtMs = timestampMillis(license.expiresAt);
+  if (status === "active" && expiresAtMs && expiresAtMs <= Date.now()) {
+    status = "expired";
+    await licenseSnap.ref.set(
+      {
+        status: "expired",
+        updatedAt: FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
+  }
+
+  const activeActivationsSnap = await db.collection("activations")
+    .where("licenseId", "==", licenseId)
+    .where("status", "==", "active")
+    .get();
+  let activated = false;
+  const activeDeviceCount = activeActivationsSnap.size;
+  if (deviceId) {
+    const activationSnap = await db
+      .collection("activations")
+      .doc(`${licenseId}-${sha256(deviceId)}`)
+      .get();
+    activated = activationSnap.exists && activationSnap.data()?.status === "active";
+  }
+
+  const valid = status === "active" && appAllowed;
+  return {
+    ok: true,
+    valid,
+    activated,
+    status,
+    reason: appAllowed ? null : "app_not_allowed",
+    licenseId,
+    plan,
+    maxDevices,
+    activeDeviceCount,
+    canActivateNewDevice: valid && (activated || activeDeviceCount < maxDevices)
+  };
 });
+
+export const sendLicenseEmail = onCall(
+  { region, secrets: [resendApiKey] },
+  async (request) => {
+    const uid = requireUid(request);
+    await requireSiteAdmin(uid);
+
+    return sendStoredLicenseEmail({
+      requestData: (request.data || {}) as Record<string, unknown>,
+      requestedByUid: uid,
+      type: "license_delivery"
+    });
+  }
+);
+
+export const resendLicenseEmail = onCall(
+  { region, secrets: [resendApiKey] },
+  async (request) => {
+    const uid = requireUid(request);
+    await requireSiteAdmin(uid);
+
+    return sendStoredLicenseEmail({
+      requestData: (request.data || {}) as Record<string, unknown>,
+      requestedByUid: uid,
+      type: "license_resend"
+    });
+  }
+);
 
 export const listLicenses = onCall({ region }, async (request) => {
   const uid = requireUid(request);
@@ -1598,10 +1904,15 @@ export const listLicenses = onCall({ region }, async (request) => {
       licenseId,
       licenseCode: asString(license.licenseCode) || licenseDoc.id,
       email: asString(license.email) || null,
+      buyerName: asString(license.buyerName) || null,
       plan: normalizePlan(license.plan),
       status: asString(license.status) || "active",
       maxDevices: Math.max(1, Number(license.maxDevices || 1)),
       activationCount: activations.filter((activation) => activation.status === "active").length,
+      emailDeliveryStatus: asString(license.emailDeliveryStatus) || null,
+      lastEmailTo: asString(license.lastEmailTo) || null,
+      lastMailLogId: asString(license.lastMailLogId) || null,
+      lastEmailError: asString(license.lastEmailError) || null,
       issuedAt,
       createdAt,
       activations
@@ -1683,6 +1994,21 @@ export const resetLicenseDevice = onCall({ region }, async (request) => {
 
   return { ok: true, activationId };
 });
+
+export const sendTestLicenseEmail = onCall(
+  { region, secrets: [resendApiKey] },
+  async (request) => {
+    const uid = requireUid(request);
+    await requireSiteAdmin(uid);
+
+    const result = await sendResendTestLicenseEmail(uid);
+    return {
+      ok: true,
+      to: adminEmail,
+      ...result
+    };
+  }
+);
 
 export const createSharedAccessCode = onCall({ region }, async (request) => {
   const uid = requireUid(request);
@@ -2244,14 +2570,13 @@ export const createAppCheckout = onCall({ region }, async (request) => {
 
   const checkoutUrl = new URL(checkoutBase);
   if (user.email) {
-    checkoutUrl.searchParams.set("checkout[email]", user.email);
+    checkoutUrl.searchParams.set("email", user.email);
   }
 
-  checkoutUrl.searchParams.set("checkout[custom][uid]", uid);
-  checkoutUrl.searchParams.set("checkout[custom][appId]", appId);
-  checkoutUrl.searchParams.set("checkout[custom][appName]", asString(app.name) || appId);
-  checkoutUrl.searchParams.set("checkout[custom][purpose]", "app_purchase");
-  checkoutUrl.searchParams.set("checkout[custom][source]", "web");
+  checkoutUrl.searchParams.set("uid", uid);
+  checkoutUrl.searchParams.set("appId", appId);
+  checkoutUrl.searchParams.set("appName", asString(app.name) || appId);
+  checkoutUrl.searchParams.set("source", "web");
 
   return { url: checkoutUrl.toString() };
 });

@@ -2,7 +2,7 @@
   "name": "brainok-lemon-saas",
   "version": "0.1.0",
   "private": true,
-  "description": "Deployable Electron + Firebase + Lemon Squeezy + Netlify starter.",
+  "description": "Deployable Brainok Store with Firebase, Netlify, and provider-agnostic licensing.",
   "workspaces": [
     "app-electron",
     "web-netlify",
@@ -12,6 +12,7 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
+    "test:license-email": "npm --workspace firebase-functions run test:license-email",
     "emulators": "firebase emulators:start --project demo-brainok-app",
     "deploy:functions": "firebase deploy --only functions",
     "deploy:rules": "firebase deploy --only firestore:rules,storage"

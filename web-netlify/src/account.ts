@@ -133,10 +133,15 @@ export interface LicenseSummary {
   licenseId: string;
   licenseCode: string;
   email: string | null;
+  buyerName?: string | null;
   plan: BrainokLicensePlan;
   status: string;
   maxDevices: number;
   activationCount: number;
+  emailDeliveryStatus?: "sent" | "failed" | "skipped" | string;
+  lastEmailTo?: string | null;
+  lastMailLogId?: string | null;
+  lastEmailError?: string | null;
   issuedAt: string | null;
   createdAt: string | null;
   activations: LicenseActivationSummary[];
@@ -302,13 +307,22 @@ export async function listMyActivationCodes() {
 }
 
 export async function createLicense(input: {
+  buyerName?: string;
   email?: string;
   plan: BrainokLicensePlan;
   licenseCode?: string;
   maxDevices?: number;
 }) {
   const result = await httpsCallable(functions, "createLicense")(input);
-  return result.data as LicenseSummary;
+  return result.data as LicenseSummary & {
+    emailDelivery?: {
+      status: "sent" | "failed" | "skipped";
+      to: string | null;
+      emailId?: string | null;
+      mailLogId?: string;
+      errorMessage?: string;
+    };
+  };
 }
 
 export async function listLicenses(search = "") {
@@ -324,6 +338,41 @@ export async function disableLicense(licenseCode: string) {
 export async function resetLicenseDevice(activationId: string) {
   const result = await httpsCallable(functions, "resetLicenseDevice")({ activationId });
   return result.data as { ok: true; activationId: string };
+}
+
+export async function sendTestLicenseEmail() {
+  const result = await httpsCallable(functions, "sendTestLicenseEmail")({});
+  return result.data as {
+    ok: true;
+    to: string;
+    emailId: string | null;
+    mailLogId: string;
+    licenseCode: string;
+  };
+}
+
+export async function sendLicenseEmail(licenseCode: string, to?: string) {
+  const result = await httpsCallable(functions, "sendLicenseEmail")({ licenseCode, to });
+  return result.data as {
+    ok: true;
+    to: string;
+    emailId: string | null;
+    mailLogId: string;
+    licenseId: string;
+    licenseCode: string;
+  };
+}
+
+export async function resendLicenseEmail(licenseCode: string, to?: string) {
+  const result = await httpsCallable(functions, "resendLicenseEmail")({ licenseCode, to });
+  return result.data as {
+    ok: true;
+    to: string;
+    emailId: string | null;
+    mailLogId: string;
+    licenseId: string;
+    licenseCode: string;
+  };
 }
 
 export async function createSharedAccessCode(appId: string, code: string, maxRedemptions = 0) {

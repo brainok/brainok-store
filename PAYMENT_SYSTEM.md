@@ -147,16 +147,17 @@ After confirmed payment:
    - `plan`
    - `maxDevices`
    - `allowedApps: ["*"]`
-4. Create `/licenseEmails/{emailJobId}`.
-5. Send the license email.
-6. Mark email job as `sent` or `failed`.
+4. Send the license email through Resend when a buyer email is present.
+5. Write `/mailLogs/{mailLogId}` and update the license email delivery fields.
+6. If email delivery fails, keep the paid license and mark the email status as `failed`.
 
 ## Email Delivery
 
-All license emails should come from or reply to:
+All license emails should use:
 
 ```text
-brainok777@gmail.com
+From: Brainok Licensing <licenses@brainok.net>
+Reply-To: brainok777@gmail.com
 ```
 
 Email content should include:
@@ -218,13 +219,19 @@ Admin capabilities:
 
 ## Implementation Notes
 
-The current repo still has Lemon Squeezy naming in several places. Do not remove those paths until the Toss flow is implemented and tested. Add Toss as a new provider path first, then migrate naming after compatibility is proven.
+The payment layer is provider-agnostic. Do not let any payment provider call or
+change desktop activation code directly. Providers should record payment state,
+then call the stable internal license issuer.
 
-Recommended provider enum:
+Provider enum:
 
 ```ts
-type PaymentProvider = "manual" | "toss" | "legacy_lemonsqueezy";
+type PaymentProvider = "manual" | "toss" | "legacy_external";
 ```
+
+Use `legacy_external` only for imported or historical records from older payment
+systems. New payment automation should be implemented as a provider module such
+as `toss`, `stripe`, or another PG without changing the licensing system.
 
 ## Failure Handling
 

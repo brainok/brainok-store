@@ -29,6 +29,7 @@ Official Firestore rules and data modeling references:
 /payments/{paymentId}
 /orders/{orderId}
 /supportTickets/{ticketId}
+/mailLogs/{mailLogId}
 /licenseEmails/{emailJobId}
 /adminAuditLogs/{auditId}
 /webhookEvents/{eventId}
@@ -180,6 +181,7 @@ Universal Brainok License source of truth.
   "licenseId": "lic_sha256prefix",
   "licenseCode": "BRAINOK-PRO-ABCD-1234",
   "licenseCodeHash": "sha256",
+  "buyerName": "Supporter Name",
   "email": "supporter@example.com",
   "emailLower": "supporter@example.com",
   "ownerUid": null,
@@ -192,6 +194,10 @@ Universal Brainok License source of truth.
   "paymentId": null,
   "legacyCode": false,
   "notes": "",
+  "emailDeliveryStatus": "sent",
+  "lastEmailTo": "supporter@example.com",
+  "lastMailLogId": "mail_abc123",
+  "lastEmailError": null,
   "issuedAt": "serverTimestamp",
   "expiresAt": null,
   "disabledAt": null,
@@ -307,7 +313,7 @@ Valid `provider` values:
 ```text
 manual
 toss
-legacy_lemonsqueezy
+legacy_external
 ```
 
 Valid `status` values:
@@ -410,7 +416,56 @@ supporter_question
 payment_help
 ```
 
+## `/mailLogs/{mailLogId}`
+
+Email delivery log for Resend license delivery and resend attempts.
+
+```json
+{
+  "mailLogId": "mail_abc123",
+  "type": "license_delivery",
+  "status": "sent",
+  "provider": "resend",
+  "providerMessageId": "resend-message-id",
+  "to": "supporter@example.com",
+  "toLower": "supporter@example.com",
+  "from": "Brainok Licensing <licenses@brainok.net>",
+  "replyTo": "brainok777@gmail.com",
+  "subject": "Your Brainok License",
+  "licenseId": "lic_sha256prefix",
+  "licenseCode": "BRAINOK-PRO-ABCD-1234",
+  "requestedByUid": "admin-uid",
+  "errorMessage": null,
+  "sentAt": "serverTimestamp",
+  "createdAt": "serverTimestamp",
+  "updatedAt": "serverTimestamp"
+}
+```
+
+Valid `type` values:
+
+```text
+license_delivery
+license_resend
+license_test
+```
+
+Valid `status` values:
+
+```text
+sending
+sent
+failed
+```
+
+Client access:
+
+- no direct read
+- no direct write
+
 ## `/licenseEmails/{emailJobId}`
+
+Legacy/future queued email job collection. New Resend send attempts should write `/mailLogs` directly.
 
 Email delivery and resend tracking.
 

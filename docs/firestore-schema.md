@@ -15,7 +15,7 @@ Only `brainok777@gmail.com` should have `"accountRole": "admin"`.
   "accessStatus": "pending",
   "inviteQuota": 0,
   "deviceLimit": 5,
-  "subscriptionProvider": null,
+  "paymentProvider": null,
   "apps": {
     "neuro-lab-1a2b3c": {
       "appId": "neuro-lab-1a2b3c",
@@ -46,7 +46,7 @@ Only `brainok777@gmail.com` should have `"accountRole": "admin"`.
     "priceCents": 1900,
     "currency": "USD",
     "interval": "monthly",
-    "checkoutUrl": "https://brainokstore.lemonsqueezy.com/checkout/..."
+    "checkoutUrl": "https://payments.example.com/checkout/..."
   },
   "downloads": {
     "releaseUrl": "https://github.com/org/repo/releases/latest",
@@ -103,6 +103,7 @@ Redeeming an invite sets `/users/{uid}.apps.{appId}.accessStatus` to `"active"`.
 {
   "licenseId": "lic_sha256-prefix",
   "licenseCode": "BRAINOK-PRO-4A7K-92QD",
+  "buyerName": "Supporter Name",
   "email": "subscriber@example.com",
   "emailLower": "subscriber@example.com",
   "plan": "pro",
@@ -111,6 +112,9 @@ Redeeming an invite sets `/users/{uid}.apps.{appId}.accessStatus` to `"active"`.
   "activationCount": 0,
   "allowedApps": ["*"],
   "createdByUid": "admin-uid",
+  "emailDeliveryStatus": "sent",
+  "lastEmailTo": "subscriber@example.com",
+  "lastMailLogId": "mail-log-id",
   "issuedAt": "serverTimestamp",
   "createdAt": "serverTimestamp",
   "updatedAt": "serverTimestamp"
@@ -118,8 +122,11 @@ Redeeming an invite sets `/users/{uid}.apps.{appId}.accessStatus` to `"active"`.
 ```
 
 Clients do not read or write this directly. The admin calls `createLicense`,
-`listLicenses`, `resetLicenseDevice`, and `disableLicense`. Desktop apps call
-`activateBrainokLicense` once with the user-entered code and device ID.
+`listLicenses`, `resetLicenseDevice`, and `disableLicense`. When `createLicense`
+receives a buyer email, it saves the license first, sends the activation code
+through Resend, and records delivery status on the license plus a `/mailLogs`
+entry. Desktop apps call `activateBrainokLicense` once with the user-entered
+code and device ID.
 
 Use one universal Brainok license for every app. The Friend / Severance shared
 code is:

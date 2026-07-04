@@ -1,4 +1,4 @@
-# Brainok Lemon SaaS Starter
+# Brainok Store
 
 This repository is structured for a real desktop app release:
 
@@ -30,7 +30,21 @@ Firestore is the account, app listing, license, and activation source of truth. 
    npx firebase functions:secrets:set QNA_SMTP_PASSWORD
    ```
 
-7. Deploy rules and functions:
+7. Set the Resend API key for license email delivery tests:
+
+   ```bash
+   npx firebase functions:secrets:set RESEND_API_KEY
+   ```
+
+   Optional: set `RESEND_FROM_EMAIL="Brainok Licensing <licenses@brainok.net>"` and `RESEND_REPLY_TO_EMAIL=brainok777@gmail.com` in `firebase-functions/.env` after verifying the sending domain in Resend.
+
+   To send a safe local test email only to `brainok777@gmail.com`:
+
+   ```bash
+   RESEND_API_KEY=... npm run test:license-email
+   ```
+
+8. Deploy rules and functions:
 
    ```bash
    npm run deploy:rules
@@ -39,10 +53,13 @@ Firestore is the account, app listing, license, and activation source of truth. 
 
 ## Licensing
 
-Admins can generate, search, disable, and reset Brainok licenses from the web
-admin account. Desktop apps call `activateBrainokLicense` once, store the
-successful local license, and then run offline.
+Admins can create manual Brainok licenses from the web admin account. When a
+buyer email is provided, the same action saves the license to Firestore, sends
+the activation code through Resend, and records the email status for retry.
+Desktop apps call `activateBrainokLicense` once, store the successful local
+license, and then run offline.
 
 ## Useful docs
 
+- Payment provider architecture: `docs/payment-provider.md`
 - Firebase HTTP functions: https://firebase.google.com/docs/functions/http-events

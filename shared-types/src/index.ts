@@ -11,26 +11,11 @@ export type LicenseStatus =
   | "expired"
   | "refunded";
 
-export type SubscriptionProvider = "lemonsqueezy";
+export type PaymentProviderId = "manual" | "toss" | "legacy_external";
 
 export type DeviceStatus = "active" | "revoked";
 
 export type DesktopOS = "mac" | "windows" | "linux" | "unknown";
-
-export interface LemonSqueezySubscriptionState {
-  customerId?: string;
-  orderId?: string;
-  orderItemId?: string;
-  productId?: string;
-  variantId?: string;
-  subscriptionId?: string;
-  status?: string;
-  renewsAt?: string | null;
-  endsAt?: string | null;
-  trialEndsAt?: string | null;
-  lastEventName?: string;
-  lastWebhookAt?: string;
-}
 
 export type AccountRole = "admin" | "user";
 export type AccessStatus = "pending" | "active" | "revoked";
@@ -64,10 +49,10 @@ export interface UserProfile {
   accessStatus: AccessStatus;
   inviteQuota: number;
   deviceLimit: number;
-  subscriptionProvider: SubscriptionProvider | null;
-  lastPaymentProvider?: SubscriptionProvider;
+  paymentProvider: PaymentProviderId | null;
+  lastPaymentProvider?: PaymentProviderId;
   apps?: Record<string, AppAccess>;
-  lemonSqueezy?: LemonSqueezySubscriptionState;
+  legacyPayment?: Record<string, unknown>;
   createdAt: unknown;
   updatedAt: unknown;
   lastLoginAt?: unknown;
@@ -87,11 +72,16 @@ export interface BrainokLicense {
   licenseId: string;
   licenseCode: string;
   email?: string | null;
+  buyerName?: string | null;
   plan: BrainokLicensePlan;
   status: BrainokLicenseStatus;
   maxDevices: number;
   activationCount: number;
   allowedApps: string[];
+  emailDeliveryStatus?: "sent" | "failed" | "skipped" | string;
+  lastEmailTo?: string | null;
+  lastMailLogId?: string | null;
+  lastEmailError?: string | null;
   issuedAt: unknown;
   createdAt: unknown;
   updatedAt: unknown;
@@ -208,14 +198,8 @@ export interface RedeemInviteResult {
   appId?: string | null;
 }
 
-export interface LemonSqueezyWebhookPayload {
-  meta?: {
-    event_name?: string;
-    custom_data?: Record<string, unknown>;
-  };
-  data?: {
-    type?: string;
-    id?: string;
-    attributes?: Record<string, unknown>;
-  };
+export interface PaymentWebhookPayload {
+  provider: PaymentProviderId;
+  eventName?: string;
+  payload: Record<string, unknown>;
 }
