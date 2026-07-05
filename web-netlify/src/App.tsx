@@ -77,7 +77,7 @@ type Language = "ko" | "en";
 type ReadmeLanguage = "en" | "ko";
 type MarkdownDraftField = "description" | "descriptionKo";
 
-const BRAND_LOGO_SRC = "/brainok-store-front-icon.png?v=2";
+const BRAND_LOGO_SRC = "/sigbrain-store-header.png?v=3";
 const SUBSCRIPTION_REQUEST_EMAIL = "brainok777@gmail.com";
 const LOCAL_APP_MEDIA: Record<string, string> = {
   "brainok-pagewheel": "/app-media/brainok-pagewheel.jpg",
@@ -700,10 +700,7 @@ export function App() {
 function BrandLogo({ className }: { className: string }) {
   return (
     <span className={className} aria-hidden="true">
-      <span className="brand-logo-icon">
-        <img src={BRAND_LOGO_SRC} alt="" />
-      </span>
-      <span className="brand-logo-text">Brainok Store</span>
+      <img className="brand-logo-image" src={BRAND_LOGO_SRC} alt="" />
     </span>
   );
 }

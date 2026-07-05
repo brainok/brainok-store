@@ -30,10 +30,7 @@ function MissingConfig({ missingKeys }: { missingKeys: string[] }) {
     <main className="page-shell">
       <section className="setup-panel">
         <span className="brand-mark" aria-hidden="true">
-          <span className="brand-logo-icon">
-            <img src="/brainok-store-front-icon.png" alt="" />
-          </span>
-          <span className="brand-logo-text">Brainok Store</span>
+          <img className="brand-logo-image" src="/sigbrain-store-header.png?v=3" alt="" />
         </span>
         <h1>Firebase config is required</h1>
         <p>
