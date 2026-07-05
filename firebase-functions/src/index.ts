@@ -242,6 +242,99 @@ function htmlEscape(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function htmlAttribute(value: string): string {
+  return htmlEscape(value).replace(/`/g, "&#96;");
+}
+
+function markdownImageLinks(markdown: string): Array<{ alt: string; url: string }> {
+  const images: Array<{ alt: string; url: string }> = [];
+  const imagePattern = /!\[([^\]]*)\]\((https?:\/\/[^)\s]+)(?:\s+"[^"]*")?\)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = imagePattern.exec(markdown)) !== null && images.length < 4) {
+    images.push({
+      alt: match[1]?.trim() || "README image",
+      url: match[2]
+    });
+  }
+
+  return images;
+}
+
+function stripMarkdownImages(markdown: string): string {
+  return markdown.replace(/!\[[^\]]*\]\(https?:\/\/[^)\s]+(?:\s+"[^"]*")?\)/g, "").trim();
+}
+
+function inlineMarkdownToHtml(value: string): string {
+  const escaped = htmlEscape(value)
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>");
+
+  return escaped.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+    (_match, label: string, url: string) => `<a href="${htmlAttribute(url)}">${label}</a>`
+  );
+}
+
+function markdownToEmailHtml(markdown: string): string {
+  const clean = stripMarkdownImages(markdown);
+  const lines = clean.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 24);
+
+  if (lines.length === 0) {
+    return "";
+  }
+
+  const html: string[] = [];
+  let listItems: string[] = [];
+
+  const flushList = () => {
+    if (listItems.length === 0) {
+      return;
+    }
+
+    html.push(`<ul style="margin:10px 0 16px;padding-left:22px">${listItems.join("")}</ul>`);
+    listItems = [];
+  };
+
+  for (const line of lines) {
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      flushList();
+      html.push(`<h3 style="margin:18px 0 8px;font-size:18px;line-height:1.35;color:#0f1f3a">${inlineMarkdownToHtml(heading[2])}</h3>`);
+      continue;
+    }
+
+    const bullet = line.match(/^[-*]\s+(.+)$/) || line.match(/^\d+\.\s+(.+)$/);
+    if (bullet) {
+      listItems.push(`<li style="margin:6px 0;line-height:1.55">${inlineMarkdownToHtml(bullet[1])}</li>`);
+      continue;
+    }
+
+    flushList();
+    html.push(`<p style="margin:0 0 12px;line-height:1.65">${inlineMarkdownToHtml(line)}</p>`);
+  }
+
+  flushList();
+  return html.join("");
+}
+
+function readmeImageLinksHtml(images: Array<{ alt: string; url: string }>, label: string): string {
+  if (images.length === 0) {
+    return "";
+  }
+
+  return [
+    `<p style="margin:14px 0 8px;color:#536174;font-size:13px;font-weight:700">${htmlEscape(label)}</p>`,
+    '<div style="display:block;margin:0 0 16px">',
+    ...images.slice(0, 2).map((image, index) => [
+      `<a href="${htmlAttribute(image.url)}" style="display:inline-block;margin:0 8px 8px 0;padding:10px 12px;border-radius:10px;background:#eef4ff;color:#174ea6;text-decoration:none;font-weight:700">`,
+      `${htmlEscape(image.alt || `Image ${index + 1}`)}`,
+      "</a>"
+    ].join("")),
+    "</div>"
+  ].join("");
+}
+
 function secretOrEnv(secret: ReturnType<typeof defineSecret>, envName: string): string | undefined {
   try {
     return secret.value() || process.env[envName];
@@ -402,6 +495,12 @@ function appAnnouncementEmailContent({
 }) {
   const productType = appType === "web_app" ? "web app" : "app";
   const subject = `[Brainok] New ${productType}: ${appName}`;
+  const koReadmeImages = markdownImageLinks(readmeKo);
+  const enReadmeImages = markdownImageLinks(readmeEn);
+  const koReadmeHtml = markdownToEmailHtml(readmeKo);
+  const enReadmeHtml = markdownToEmailHtml(readmeEn);
+  const textReadmeKo = stripMarkdownImages(readmeKo) || "(Open Brainok Store to view the Korean README and screenshots.)";
+  const textReadmeEn = stripMarkdownImages(readmeEn) || "(Open Brainok Store to view the English README and screenshots.)";
   const versionLine = latestVersion ? `Version: ${latestVersion}` : "";
   const categoryLine = category ? `Category: ${category}` : "";
   const text = [
@@ -417,33 +516,46 @@ function appAnnouncementEmailContent({
     "English summary:",
     shortDescriptionEn || "(No English summary yet.)",
     "",
-    "README Korean:",
-    readmeKo || "(No Korean README yet.)",
+    "Korean README preview:",
+    textReadmeKo,
     "",
-    "README English:",
-    readmeEn || "(No English README yet.)",
+    "English README preview:",
+    textReadmeEn,
     "",
     `Open Brainok Store: ${appUrl}`,
     "",
     `Support: ${adminEmail}`
   ].filter((line) => line !== "").join("\n");
   const html = [
-    `<p>A new Brainok ${htmlEscape(productType)} is available.</p>`,
-    `<h1>${htmlEscape(appName)}</h1>`,
-    "<ul>",
-    latestVersion ? `<li><strong>Version:</strong> ${htmlEscape(latestVersion)}</li>` : "",
-    category ? `<li><strong>Category:</strong> ${htmlEscape(category)}</li>` : "",
-    "</ul>",
-    "<h2>한국어 요약</h2>",
-    `<p>${htmlEscape(shortDescriptionKo || "아직 한국어 요약이 없습니다.").replace(/\n/g, "<br>")}</p>`,
-    "<h2>English Summary</h2>",
-    `<p>${htmlEscape(shortDescriptionEn || "No English summary yet.").replace(/\n/g, "<br>")}</p>`,
-    "<h2>README 한국어</h2>",
-    `<pre style="white-space:pre-wrap;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">${htmlEscape(readmeKo || "아직 한국어 README가 없습니다.")}</pre>`,
-    "<h2>README English</h2>",
-    `<pre style="white-space:pre-wrap;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">${htmlEscape(readmeEn || "No English README yet.")}</pre>`,
-    `<p><a href="${htmlEscape(appUrl)}">Open Brainok Store</a></p>`,
-    `<p>Support: <a href="mailto:${adminEmail}">${adminEmail}</a></p>`
+    '<div style="margin:0;padding:28px;background:#f5f7fb;font-family:system-ui,-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;color:#162033">',
+    '<div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #d9e2ef;border-radius:18px;overflow:hidden">',
+    '<div style="padding:28px 30px;background:#0f1f3a;color:#ffffff">',
+    `<p style="margin:0 0 10px;color:#a9c7ff;font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase">New Brainok ${htmlEscape(productType)}</p>`,
+    `<h1 style="margin:0;font-size:34px;line-height:1.15">${htmlEscape(appName)}</h1>`,
+    '<div style="margin-top:16px;color:#dbe7ff;font-size:14px">',
+    latestVersion ? `<span style="display:inline-block;margin:0 12px 8px 0">Version ${htmlEscape(latestVersion)}</span>` : "",
+    category ? `<span style="display:inline-block;margin:0 12px 8px 0">${htmlEscape(category)}</span>` : "",
+    "</div>",
+    "</div>",
+    '<div style="padding:28px 30px">',
+    '<h2 style="margin:0 0 10px;font-size:22px;color:#0f1f3a">한국어 요약</h2>',
+    `<p style="margin:0 0 24px;line-height:1.65;color:#334155">${htmlEscape(shortDescriptionKo || "아직 한국어 요약이 없습니다.").replace(/\n/g, "<br>")}</p>`,
+    '<h2 style="margin:0 0 10px;font-size:22px;color:#0f1f3a">English Summary</h2>',
+    `<p style="margin:0 0 26px;line-height:1.65;color:#334155">${htmlEscape(shortDescriptionEn || "No English summary yet.").replace(/\n/g, "<br>")}</p>`,
+    '<div style="border-top:1px solid #e5edf7;padding-top:22px">',
+    '<h2 style="margin:0 0 12px;font-size:20px;color:#0f1f3a">README Preview</h2>',
+    koReadmeHtml ? '<h3 style="margin:16px 0 8px;font-size:16px;color:#174ea6">한국어</h3>' : "",
+    koReadmeHtml || '<p style="margin:0 0 12px;color:#536174">한국어 README는 Brainok Store에서 확인하세요.</p>',
+    readmeImageLinksHtml(koReadmeImages, "한국어 README images"),
+    enReadmeHtml ? '<h3 style="margin:16px 0 8px;font-size:16px;color:#174ea6">English</h3>' : "",
+    enReadmeHtml || '<p style="margin:0 0 12px;color:#536174">View the English README in Brainok Store.</p>',
+    readmeImageLinksHtml(enReadmeImages, "English README images"),
+    "</div>",
+    `<p style="margin:26px 0 10px"><a href="${htmlAttribute(appUrl)}" style="display:inline-block;background:#174ea6;color:#ffffff;text-decoration:none;border-radius:12px;padding:13px 18px;font-weight:800">Open Brainok Store</a></p>`,
+    `<p style="margin:20px 0 0;color:#536174;font-size:13px">Support: <a href="mailto:${adminEmail}" style="color:#174ea6">${adminEmail}</a></p>`,
+    "</div>",
+    "</div>",
+    "</div>"
   ].join("");
 
   return { subject, text, html };
