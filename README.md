@@ -62,4 +62,6 @@ license, and then run offline.
 ## Useful docs
 
 - Payment provider architecture: `docs/payment-provider.md`
+- App Firebase activation integration: `README_APP_ACTIVATION_INTEGRATION.md`
+- App public release repo workflow: `README_APP_RELEASE_REPO_WORKFLOW.md`
 - Firebase HTTP functions: https://firebase.google.com/docs/functions/http-events
