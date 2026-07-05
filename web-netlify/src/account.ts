@@ -265,6 +265,18 @@ export async function updateApp(appId: string, input: UpdateAppInput) {
   return result.data as { ok: true; appId: string };
 }
 
+export async function sendAppAnnouncement(appId: string, maxRecipients = 100) {
+  const result = await httpsCallable(functions, "sendAppAnnouncement")({ appId, maxRecipients });
+  return result.data as {
+    ok: true;
+    announcementId: string;
+    recipientCount: number;
+    sentCount: number;
+    failedCount: number;
+    failed?: Array<{ to: string; errorMessage: string }>;
+  };
+}
+
 export async function getAppFromServer(appId: string) {
   const snapshot = await getDocFromServer(doc(db, "apps", appId));
   return snapshot.exists() ? (snapshot.data() as BrainokApp) : null;

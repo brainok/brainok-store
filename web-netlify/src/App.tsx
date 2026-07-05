@@ -58,6 +58,7 @@ import {
   requestBrainokLicense,
   resendLicenseEmail,
   resetLicenseDevice,
+  sendAppAnnouncement,
   sendTestLicenseEmail,
   updateSiteSettings,
   updateApp,
@@ -2028,6 +2029,7 @@ function AccountView({
   const [appUploadTarget, setAppUploadTarget] = useState<ReleaseUploadTarget>("icon");
   const [appUploadProgress, setAppUploadProgress] = useState<number | null>(null);
   const [appSaveStatus, setAppSaveStatus] = useState<string | null>(null);
+  const [appAnnouncementStatus, setAppAnnouncementStatus] = useState<string | null>(null);
   const [readmeLanguage, setReadmeLanguage] = useState<ReadmeLanguage>(language);
   const [markdownImageStatus, setMarkdownImageStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -2059,11 +2061,13 @@ function AccountView({
     if (!selectedManagedApp) {
       setAppDraft(emptyAppDraft);
       setAppSaveStatus(null);
+      setAppAnnouncementStatus(null);
       return;
     }
 
     setAppDraft(appToDraft(selectedManagedApp));
     setAppSaveStatus(null);
+    setAppAnnouncementStatus(null);
   }, [selectedManagedApp?.appId]);
 
   function selectLoginMode(mode: "user" | "admin") {
@@ -2154,6 +2158,30 @@ function AccountView({
       setAppSaveStatus(`Saved ${appDraft.name || selectedManagedApp.name}`);
     } catch (error) {
       onError(error instanceof Error ? error.message : "Could not save app settings.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function announceSelectedApp() {
+    try {
+      if (!selectedManagedApp) {
+        return;
+      }
+
+      setBusy(true);
+      onError(null);
+      setAppAnnouncementStatus(null);
+      const result = await sendAppAnnouncement(selectedManagedApp.appId);
+      if (result.recipientCount === 0) {
+        setAppAnnouncementStatus("No active license holder email addresses were found.");
+        return;
+      }
+
+      const failedCopy = result.failedCount > 0 ? `, ${result.failedCount} failed` : "";
+      setAppAnnouncementStatus(`Announcement sent to ${result.sentCount}/${result.recipientCount} license holders${failedCopy}.`);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "Could not send app announcement.");
     } finally {
       setBusy(false);
     }
@@ -2627,11 +2655,18 @@ function AccountView({
                   </label>
                 </div>
 
-                <button className="button primary full" disabled={busy || !selectedManagedApp} onClick={() => void saveSelectedApp()}>
-                  <Save size={18} />
-                  Save app settings
-                </button>
+                <div className="publisher-actions">
+                  <button className="button primary" disabled={busy || !selectedManagedApp} onClick={() => void saveSelectedApp()}>
+                    <Save size={18} />
+                    Save app settings
+                  </button>
+                  <button className="button secondary" disabled={busy || !selectedManagedApp} onClick={() => void announceSelectedApp()}>
+                    <Mail size={18} />
+                    Send app announcement
+                  </button>
+                </div>
                 {appSaveStatus ? <p className="status-note">{appSaveStatus}</p> : null}
+                {appAnnouncementStatus ? <p className="status-note">{appAnnouncementStatus}</p> : null}
               </>
             ) : null}
 

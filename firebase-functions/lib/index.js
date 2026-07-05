@@ -151,6 +151,13 @@ function textField(value, fallback, maxLength = 500) {
     }
     return (asString(value) ?? fallback).slice(0, maxLength);
 }
+function emailPreviewText(value, maxLength = 6000) {
+    const text = textField(value, "", maxLength).trim();
+    if (!text) {
+        return "";
+    }
+    return text.length >= maxLength ? `${text.slice(0, maxLength - 20)}\n...` : text;
+}
 function htmlEscape(value) {
     return value
         .replace(/&/g, "&amp;")
@@ -256,6 +263,54 @@ function licenseRequestEmailContent({ requestId, name, email, plan, requestedPla
         "<p><strong>Message:</strong></p>",
         `<p>${htmlEscape(message || "").replace(/\n/g, "<br>")}</p>`,
         "<p>Next step: open Account &gt; Brainok Licenses, confirm payment/request, then Create License with this buyer email.</p>"
+    ].join("");
+    return { subject, text, html };
+}
+function appAnnouncementEmailContent({ appName, appType, category, latestVersion, shortDescriptionKo, shortDescriptionEn, readmeKo, readmeEn, appUrl }) {
+    const productType = appType === "web_app" ? "web app" : "app";
+    const subject = `[Brainok] New ${productType}: ${appName}`;
+    const versionLine = latestVersion ? `Version: ${latestVersion}` : "";
+    const categoryLine = category ? `Category: ${category}` : "";
+    const text = [
+        `A new Brainok ${productType} is available.`,
+        "",
+        appName,
+        versionLine,
+        categoryLine,
+        "",
+        "Korean summary:",
+        shortDescriptionKo || "(No Korean summary yet.)",
+        "",
+        "English summary:",
+        shortDescriptionEn || "(No English summary yet.)",
+        "",
+        "README Korean:",
+        readmeKo || "(No Korean README yet.)",
+        "",
+        "README English:",
+        readmeEn || "(No English README yet.)",
+        "",
+        `Open Brainok Store: ${appUrl}`,
+        "",
+        `Support: ${adminEmail}`
+    ].filter((line) => line !== "").join("\n");
+    const html = [
+        `<p>A new Brainok ${htmlEscape(productType)} is available.</p>`,
+        `<h1>${htmlEscape(appName)}</h1>`,
+        "<ul>",
+        latestVersion ? `<li><strong>Version:</strong> ${htmlEscape(latestVersion)}</li>` : "",
+        category ? `<li><strong>Category:</strong> ${htmlEscape(category)}</li>` : "",
+        "</ul>",
+        "<h2>한국어 요약</h2>",
+        `<p>${htmlEscape(shortDescriptionKo || "아직 한국어 요약이 없습니다.").replace(/\n/g, "<br>")}</p>`,
+        "<h2>English Summary</h2>",
+        `<p>${htmlEscape(shortDescriptionEn || "No English summary yet.").replace(/\n/g, "<br>")}</p>`,
+        "<h2>README 한국어</h2>",
+        `<pre style="white-space:pre-wrap;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">${htmlEscape(readmeKo || "아직 한국어 README가 없습니다.")}</pre>`,
+        "<h2>README English</h2>",
+        `<pre style="white-space:pre-wrap;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">${htmlEscape(readmeEn || "No English README yet.")}</pre>`,
+        `<p><a href="${htmlEscape(appUrl)}">Open Brainok Store</a></p>`,
+        `<p>Support: <a href="mailto:${adminEmail}">${adminEmail}</a></p>`
     ].join("");
     return { subject, text, html };
 }
@@ -993,6 +1048,106 @@ export const updateApp = onCall({ region }, async (request) => {
         });
     });
     return { ok: true, appId };
+});
+async function activeLicenseRecipientEmails(maxRecipients) {
+    const snapshot = await db.collection("licenses")
+        .where("status", "==", "active")
+        .limit(Math.max(1, Math.min(maxRecipients * 3, 500)))
+        .get();
+    const recipients = new Map();
+    for (const licenseDoc of snapshot.docs) {
+        const license = licenseDoc.data() || {};
+        const email = asString(license.email) || asString(license.lastEmailTo);
+        const normalized = emailLower(email);
+        if (!email || !normalized || !email.includes("@") || recipients.has(normalized)) {
+            continue;
+        }
+        recipients.set(normalized, email);
+        if (recipients.size >= maxRecipients) {
+            break;
+        }
+    }
+    return Array.from(recipients.values());
+}
+export const sendAppAnnouncement = onCall({ region, secrets: [resendApiKey] }, async (request) => {
+    const uid = requireUid(request);
+    await requireSiteAdmin(uid);
+    const data = (request.data || {});
+    const appId = asString(data.appId);
+    const maxRecipients = Math.max(1, Math.min(asNumber(data.maxRecipients) ?? 100, 200));
+    if (!appId) {
+        throw new HttpsError("invalid-argument", "appId is required.");
+    }
+    const appSnap = await db.collection("apps").doc(appId).get();
+    if (!appSnap.exists) {
+        throw new HttpsError("not-found", "App does not exist.");
+    }
+    const app = appSnap.data() || {};
+    const appName = asString(app.name) || appId;
+    const downloads = (app.downloads || {});
+    const appType = oneOf(app.appType, ["application", "web_app"], "application");
+    const recipients = await activeLicenseRecipientEmails(maxRecipients);
+    const announcementRef = db.collection("appAnnouncements").doc();
+    const storeUrl = process.env.BRAINOK_STORE_URL || "https://store.brainok.net";
+    const content = appAnnouncementEmailContent({
+        appName,
+        appType,
+        category: asString(app.category) || null,
+        latestVersion: asString(downloads.latestVersion) || null,
+        shortDescriptionKo: emailPreviewText(app.shortDescriptionKo, 1200),
+        shortDescriptionEn: emailPreviewText(app.shortDescription, 1200),
+        readmeKo: emailPreviewText(app.descriptionKo),
+        readmeEn: emailPreviewText(app.description),
+        appUrl: storeUrl
+    });
+    await announcementRef.set({
+        announcementId: announcementRef.id,
+        appId,
+        appName,
+        status: recipients.length > 0 ? "sending" : "no_recipients",
+        recipientCount: recipients.length,
+        sentCount: 0,
+        failedCount: 0,
+        createdByUid: uid,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+    });
+    const sent = [];
+    const failed = [];
+    for (const to of recipients) {
+        try {
+            const result = await sendResendEmail({
+                to,
+                ...content,
+                requestId: announcementRef.id,
+                type: "app_announcement",
+                requestedByUid: uid
+            });
+            sent.push({ to, ...result });
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : "Could not send app announcement.";
+            failed.push({ to, errorMessage: message.slice(0, 500) });
+        }
+    }
+    await announcementRef.set(compactMap({
+        status: failed.length > 0 ? "partial" : "sent",
+        sentCount: sent.length,
+        failedCount: failed.length,
+        sentTo: sent.map((item) => item.to),
+        failedTo: failed,
+        lastMailLogIds: sent.map((item) => item.mailLogId).slice(-20),
+        sentAt: sent.length > 0 ? FieldValue.serverTimestamp() : undefined,
+        updatedAt: FieldValue.serverTimestamp()
+    }), { merge: true });
+    return {
+        ok: true,
+        announcementId: announcementRef.id,
+        recipientCount: recipients.length,
+        sentCount: sent.length,
+        failedCount: failed.length,
+        failed
+    };
 });
 export const askAppQuestion = onCall({ region, secrets: [qnaSmtpPassword] }, async (request) => {
     const uid = requireUid(request);
