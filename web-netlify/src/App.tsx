@@ -135,6 +135,7 @@ const UI_TEXT = {
       checkoutMissing: "결제 링크 없음",
       activateInApp: "앱에서 활성화",
       release: "릴리스",
+      openWebApp: "웹 앱 열기",
       docs: "문서",
       demo: "데모",
       note: "무료 다운로드. 계정은 필요 없습니다. 앱을 실행하면 30일 체험판이 시작되고, 이후 하나의 Brainok 라이선스로 계속 사용할 수 있습니다.",
@@ -313,6 +314,7 @@ const UI_TEXT = {
       checkoutMissing: "Checkout link not set",
       activateInApp: "Activate in app",
       release: "Release",
+      openWebApp: "Open web app",
       docs: "Docs",
       demo: "Demo",
       note: "Download free. No account required. A 30-day trial starts in the app, then one Brainok license unlocks continued use.",
@@ -1337,6 +1339,7 @@ function AppsView({
               const pricingMode = app.pricing?.mode || "invite_only";
               const downloadLinks = appDownloadLinks(app);
               const releaseUrl = app.downloads?.releaseUrl || null;
+              const webAppUrl = isWebApp ? releaseUrl : null;
               const docsUrl = app.downloads?.docsUrl || null;
               const primaryMedia = appPrimaryMedia(app);
               const videoUrl = app.media?.videoUrl || null;
@@ -1385,23 +1388,35 @@ function AppsView({
                   </div>
                 </dl>
 
-                <div className="download-actions">
-                  {downloadLinks.length > 0 ? (
+                {isWebApp ? (
+                  webAppUrl ? (
+                    <div className="download-actions">
+                      <a className="button primary" href={webAppUrl} target="_blank" rel="noreferrer">
+                        <ExternalLink size={18} />
+                        {text.apps.openWebApp}
+                      </a>
+                    </div>
+                  ) : null
+                ) : (
+                  <div className="download-actions">
+                    {downloadLinks.length > 0 ? (
                     downloadLinks.map((downloadLink, index) => (
                       <a className={index === 0 ? "button primary" : "button secondary"} href={downloadLink.href} key={downloadLink.label}>
                         <Download size={18} />
                         {localizedDownloadLabel(downloadLink.kind, text)}
                       </a>
                     ))
-                  ) : (
-                    <button className="button secondary" disabled>
-                      <Download size={18} />
-                      {text.apps.noBuildYet}
-                    </button>
-                  )}
-                </div>
+                    ) : (
+                      <button className="button secondary" disabled>
+                        <Download size={18} />
+                        {text.apps.noBuildYet}
+                      </button>
+                    )}
+                  </div>
+                )}
 
-                <div className="button-row">
+                {!isWebApp ? (
+                  <div className="button-row">
                   <button className="button primary" type="button" onClick={() => onOpenSupportRequest(app.appId)}>
                     <ReceiptText size={18} />
                     {text.apps.supportRequest}
@@ -1456,7 +1471,28 @@ function AppsView({
                       {text.apps.demo}
                     </a>
                   ) : null}
-                </div>
+                  </div>
+                ) : docsUrl || floatingVideoUrl || externalVideoUrl ? (
+                  <div className="button-row">
+                    {docsUrl ? (
+                      <a className="button secondary" href={docsUrl}>
+                        <BookOpen size={18} />
+                        {text.apps.docs}
+                      </a>
+                    ) : null}
+                    {floatingVideoUrl ? (
+                      <button className="button secondary" type="button" onClick={() => setFloatingDemoApp(app)}>
+                        <PlayCircle size={18} />
+                        {text.apps.demo}
+                      </button>
+                    ) : externalVideoUrl ? (
+                      <a className="button secondary" href={externalVideoUrl} target="_blank" rel="noreferrer">
+                        <PlayCircle size={18} />
+                        {text.apps.demo}
+                      </a>
+                    ) : null}
+                  </div>
+                ) : null}
                 {!isWebApp ? (
                   <div className="activation-note app-card-note">
                     <KeyRound size={18} />
@@ -1529,6 +1565,7 @@ function AppDetailView({
   const pricingMode = app.pricing?.mode || "invite_only";
   const downloadLinks = appDownloadLinks(app);
   const releaseUrl = app.downloads?.releaseUrl || null;
+  const webAppUrl = isWebApp ? releaseUrl : null;
   const docsUrl = app.downloads?.docsUrl || null;
   const primaryMedia = appPrimaryMedia(app);
   const videoUrl = app.media?.videoUrl || null;
@@ -1639,23 +1676,35 @@ function AppDetailView({
             </div>
           ) : null}
 
-          <div className="download-actions detail-downloads">
-            {downloadLinks.length > 0 ? (
+          {isWebApp ? (
+            webAppUrl ? (
+              <div className="download-actions detail-downloads">
+                <a className="button primary" href={webAppUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink size={18} />
+                  {text.apps.openWebApp}
+                </a>
+              </div>
+            ) : null
+          ) : (
+            <div className="download-actions detail-downloads">
+              {downloadLinks.length > 0 ? (
               downloadLinks.map((downloadLink, index) => (
                 <a className={index === 0 ? "button primary" : "button secondary"} href={downloadLink.href} key={downloadLink.label}>
                   <Download size={18} />
                   {localizedDownloadLabel(downloadLink.kind, text)}
                 </a>
               ))
-            ) : (
-              <button className="button secondary" disabled>
-                <Download size={18} />
-                {text.apps.noBuildYet}
-              </button>
-            )}
-          </div>
+              ) : (
+                <button className="button secondary" disabled>
+                  <Download size={18} />
+                  {text.apps.noBuildYet}
+                </button>
+              )}
+            </div>
+          )}
 
-          <div className="button-row">
+          {!isWebApp ? (
+            <div className="button-row">
             <button className="button primary" type="button" onClick={onOpenSupportRequest}>
               <ReceiptText size={18} />
               {text.apps.supportRequest}
@@ -1705,7 +1754,23 @@ function AppDetailView({
                 {text.apps.demo}
               </a>
             ) : null}
-          </div>
+            </div>
+          ) : docsUrl || externalVideoUrl ? (
+            <div className="button-row">
+              {docsUrl ? (
+                <a className="button secondary" href={docsUrl}>
+                  <BookOpen size={18} />
+                  {text.apps.docs}
+                </a>
+              ) : null}
+              {externalVideoUrl ? (
+                <a className="button secondary" href={externalVideoUrl} target="_blank" rel="noreferrer">
+                  <PlayCircle size={18} />
+                  {text.apps.demo}
+                </a>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -3716,6 +3781,10 @@ type DownloadLinkKind = "windows" | "mac" | "release";
 
 function appDownloadLinks(app: BrainokApp) {
   const links: Array<{ kind: DownloadLinkKind; label: string; href: string }> = [];
+
+  if (appKind(app) === "web_app") {
+    return links;
+  }
 
   if (app.downloads?.windowsUrl) {
     links.push({ kind: "windows", label: "Download Win", href: app.downloads.windowsUrl });
