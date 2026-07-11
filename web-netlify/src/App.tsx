@@ -2035,6 +2035,12 @@ function AccountView({
   const [busy, setBusy] = useState(false);
   const canManageApps = isAdminProfile(profile);
   const manageableApps = sortAppsForDisplay(canManageApps ? apps : apps.filter((app) => app.ownerUid === user?.uid));
+  const manageableApplications = manageableApps.filter((app) => appKind(app) === "application");
+  const manageableWebApps = manageableApps.filter((app) => appKind(app) === "web_app");
+  const manageableAppGroups = [
+    { title: "Applications", type: "application" as AppType, apps: manageableApplications },
+    { title: "Web Apps", type: "web_app" as AppType, apps: manageableWebApps }
+  ];
   const selectedManagedApp = manageableApps.find((app) => app.appId === selectedAppId) || manageableApps[0] || null;
   const accessibleApps = Object.values(profile?.apps || {}).filter((app) => app.accessStatus === "active");
 
@@ -2422,36 +2428,56 @@ function AccountView({
                     <span className="mini-label">Select app to edit</span>
                     {selectedManagedApp ? <strong>Editing: {selectedManagedApp.name}</strong> : null}
                   </div>
-                  <div className="app-order-actions">
-                    <button className="icon-button" type="button" aria-label="Move selected app up" title="Move up" disabled={busy || !selectedManagedApp} onClick={() => void moveSelectedApp("up")}>
-                      <ArrowUp size={18} />
-                    </button>
-                    <button className="icon-button" type="button" aria-label="Move selected app down" title="Move down" disabled={busy || !selectedManagedApp} onClick={() => void moveSelectedApp("down")}>
-                      <ArrowDown size={18} />
-                    </button>
-                  </div>
-                  <div className="app-selector-rail" role="list">
-                    {manageableApps.map((app) => {
-                      const selected = selectedManagedApp?.appId === app.appId;
-                      const iconUrl = appIconUrl(app);
+                  <div className="app-selector-sections">
+                    {manageableAppGroups.map((group) => {
+                      const selectedInGroup = selectedManagedApp ? appKind(selectedManagedApp) === group.type : false;
 
                       return (
-                        <button
-                          className={selected ? "app-selector-tile active" : "app-selector-tile"}
-                          key={app.appId}
-                          type="button"
-                          role="listitem"
-                          aria-pressed={selected}
-                          onClick={() => setSelectedAppId(app.appId)}
-                        >
-                          <span className="app-selector-icon">
-                            {iconUrl ? <img src={iconUrl} alt="" /> : <Package size={23} />}
-                          </span>
-                          <span className="app-selector-copy">
-                            <strong>{app.name}</strong>
-                            <small>{appTypeLabel(app)} · order {displaySortOrder(app, manageableApps.indexOf(app))}</small>
-                          </span>
-                        </button>
+                        <section className="app-selector-group" key={group.type} aria-label={group.title}>
+                          <div className="app-selector-group-header">
+                            <div>
+                              <h3>{group.title}</h3>
+                              <span>{group.apps.length}</span>
+                            </div>
+                            <div className="app-order-actions">
+                              <button className="icon-button" type="button" aria-label={`Move selected ${group.title} app up`} title="Move up" disabled={busy || !selectedInGroup} onClick={() => void moveSelectedApp("up")}>
+                                <ArrowUp size={18} />
+                              </button>
+                              <button className="icon-button" type="button" aria-label={`Move selected ${group.title} app down`} title="Move down" disabled={busy || !selectedInGroup} onClick={() => void moveSelectedApp("down")}>
+                                <ArrowDown size={18} />
+                              </button>
+                            </div>
+                          </div>
+                          {group.apps.length > 0 ? (
+                            <div className="app-selector-rail" role="list">
+                              {group.apps.map((app, groupIndex) => {
+                                const selected = selectedManagedApp?.appId === app.appId;
+                                const iconUrl = appIconUrl(app);
+
+                                return (
+                                  <button
+                                    className={selected ? "app-selector-tile active" : "app-selector-tile"}
+                                    key={app.appId}
+                                    type="button"
+                                    role="listitem"
+                                    aria-pressed={selected}
+                                    onClick={() => setSelectedAppId(app.appId)}
+                                  >
+                                    <span className="app-selector-icon">
+                                      {iconUrl ? <img src={iconUrl} alt="" /> : <Package size={23} />}
+                                    </span>
+                                    <span className="app-selector-copy">
+                                      <strong>{app.name}</strong>
+                                      <small>{appTypeLabel(app)} · order {displaySortOrder(app, groupIndex)}</small>
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="app-selector-empty">No {group.title.toLowerCase()} yet.</p>
+                          )}
+                        </section>
                       );
                     })}
                   </div>
