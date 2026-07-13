@@ -1,0 +1,265 @@
+{
+  "generatedAt": "2026-07-13T06:23:50.111Z",
+  "source": "github-actions",
+  "firestoreProjectId": "braionk-lab",
+  "repoCount": 11,
+  "checkedRepos": 11,
+  "totalAssets": 22,
+  "totalDownloads": 50,
+  "errors": [],
+  "groups": [
+    {
+      "appName": "Brainok Clipboard",
+      "repoUrl": "https://github.com/brainok/Brainok-clipboard-mac-release",
+      "downloads": 2,
+      "assets": [
+        {
+          "version": "v2.02",
+          "releaseUrl": "https://github.com/brainok/Brainok-clipboard-mac-release/releases/tag/v2.02",
+          "assetName": "BrainokClipboard.dmg",
+          "assetUrl": "https://github.com/brainok/Brainok-clipboard-mac-release/releases/download/v2.02/BrainokClipboard.dmg",
+          "updatedAt": "2026-07-13T05:01:01Z",
+          "downloads": 2
+        }
+      ]
+    },
+    {
+      "appName": "Disk Occupy",
+      "repoUrl": "https://github.com/brainok/Brainok-disk-occupy-mac-release",
+      "downloads": 2,
+      "assets": [
+        {
+          "version": "v2.02",
+          "releaseUrl": "https://github.com/brainok/Brainok-disk-occupy-mac-release/releases/tag/v2.02",
+          "assetName": "Brainok-Disk-Occupy.dmg",
+          "assetUrl": "https://github.com/brainok/Brainok-disk-occupy-mac-release/releases/download/v2.02/Brainok-Disk-Occupy.dmg",
+          "updatedAt": "2026-07-13T01:42:27Z",
+          "downloads": 2
+        }
+      ]
+    },
+    {
+      "appName": "File Pad",
+      "repoUrl": "https://github.com/brainok/Multiple-file-viewer-mac-release",
+      "downloads": 4,
+      "assets": [
+        {
+          "version": "v2.07",
+          "releaseUrl": "https://github.com/brainok/Multiple-file-viewer-mac-release/releases/tag/v2.07",
+          "assetName": "File-Pad.dmg",
+          "assetUrl": "https://github.com/brainok/Multiple-file-viewer-mac-release/releases/download/v2.07/File-Pad.dmg",
+          "updatedAt": "2026-07-11T06:36:46Z",
+          "downloads": 1
+        },
+        {
+          "version": "v2.06",
+          "releaseUrl": "https://github.com/brainok/Multiple-file-viewer-mac-release/releases/tag/v2.06",
+          "assetName": "File-Pad.dmg",
+          "assetUrl": "https://github.com/brainok/Multiple-file-viewer-mac-release/releases/download/v2.06/File-Pad.dmg",
+          "updatedAt": "2026-07-11T06:09:25Z",
+          "downloads": 3
+        }
+      ]
+    },
+    {
+      "appName": "Hotkey Launcher",
+      "repoUrl": "https://github.com/brainok/Hotkey-launcher-mac-release",
+      "downloads": 15,
+      "assets": [
+        {
+          "version": "v2.06",
+          "releaseUrl": "https://github.com/brainok/Hotkey-launcher-mac-release/releases/tag/v2.06",
+          "assetName": "Hotkey-Launcher.dmg",
+          "assetUrl": "https://github.com/brainok/Hotkey-launcher-mac-release/releases/download/v2.06/Hotkey-Launcher.dmg",
+          "updatedAt": "2026-07-05T13:24:19Z",
+          "downloads": 3
+        },
+        {
+          "version": "v2.05",
+          "releaseUrl": "https://github.com/brainok/Hotkey-launcher-mac-release/releases/tag/v2.05",
+          "assetName": "Hotkey-Launcher.dmg",
+          "assetUrl": "https://github.com/brainok/Hotkey-launcher-mac-release/releases/download/v2.05/Hotkey-Launcher.dmg",
+          "updatedAt": "2026-07-03T22:54:57Z",
+          "downloads": 2
+        },
+        {
+          "version": "v2.04",
+          "releaseUrl": "https://github.com/brainok/Hotkey-launcher-mac-release/releases/tag/v2.04",
+          "assetName": "Hotkey.Launcher.dmg",
+          "assetUrl": "https://github.com/brainok/Hotkey-launcher-mac-release/releases/download/v2.04/Hotkey.Launcher.dmg",
+          "updatedAt": "2026-07-03T20:04:40Z",
+          "downloads": 2
+        },
+        {
+          "version": "v2.03",
+          "releaseUrl": "https://github.com/brainok/Hotkey-launcher-mac-release/releases/tag/v2.03",
+          "assetName": "Hotkey-Launcher.dmg",
+          "assetUrl": "https://github.com/brainok/Hotkey-launcher-mac-release/releases/download/v2.03/Hotkey-Launcher.dmg",
+          "updatedAt": "2026-07-01T10:04:14Z",
+          "downloads": 6
+        },
+        {
+          "version": "v2.02",
+          "releaseUrl": "https://github.com/brainok/Hotkey-launcher-mac-release/releases/tag/v2.02",
+          "assetName": "Hotkey-Launcher.dmg",
+          "assetUrl": "https://github.com/brainok/Hotkey-launcher-mac-release/releases/download/v2.02/Hotkey-Launcher.dmg",
+          "updatedAt": "2026-06-29T04:13:30Z",
+          "downloads": 2
+        }
+      ]
+    },
+    {
+      "appName": "Mac All Hide",
+      "repoUrl": "https://github.com/brainok/Mac-all-hide-mac-release",
+      "downloads": 2,
+      "assets": [
+        {
+          "version": "v2.03",
+          "releaseUrl": "https://github.com/brainok/Mac-all-hide-mac-release/releases/tag/v2.03",
+          "assetName": "Mac-All-Hide.dmg",
+          "assetUrl": "https://github.com/brainok/Mac-all-hide-mac-release/releases/download/v2.03/Mac-All-Hide.dmg",
+          "updatedAt": "2026-07-11T10:24:19Z",
+          "downloads": 1
+        },
+        {
+          "version": "v2.02",
+          "releaseUrl": "https://github.com/brainok/Mac-all-hide-mac-release/releases/tag/v2.02",
+          "assetName": "Mac-All-Hide.dmg",
+          "assetUrl": "https://github.com/brainok/Mac-all-hide-mac-release/releases/download/v2.02/Mac-All-Hide.dmg",
+          "updatedAt": "2026-07-11T10:07:09Z",
+          "downloads": 1
+        }
+      ]
+    },
+    {
+      "appName": "Menu Fold",
+      "repoUrl": "https://github.com/brainok/Menubar-mac-release",
+      "downloads": 6,
+      "assets": [
+        {
+          "version": "v2.03",
+          "releaseUrl": "https://github.com/brainok/Menubar-mac-release/releases/tag/v2.03",
+          "assetName": "MenuFold.dmg",
+          "assetUrl": "https://github.com/brainok/Menubar-mac-release/releases/download/v2.03/MenuFold.dmg",
+          "updatedAt": "2026-07-11T12:39:37Z",
+          "downloads": 2
+        },
+        {
+          "version": "v2.02",
+          "releaseUrl": "https://github.com/brainok/Menubar-mac-release/releases/tag/v2.02",
+          "assetName": "MenuFold.dmg",
+          "assetUrl": "https://github.com/brainok/Menubar-mac-release/releases/download/v2.02/MenuFold.dmg",
+          "updatedAt": "2026-07-11T12:27:20Z",
+          "downloads": 2
+        },
+        {
+          "version": "v2.01",
+          "releaseUrl": "https://github.com/brainok/Menubar-mac-release/releases/tag/v2.01",
+          "assetName": "MenuFold.dmg",
+          "assetUrl": "https://github.com/brainok/Menubar-mac-release/releases/download/v2.01/MenuFold.dmg",
+          "updatedAt": "2026-07-11T12:00:25Z",
+          "downloads": 2
+        }
+      ]
+    },
+    {
+      "appName": "Pagewheel",
+      "repoUrl": "https://github.com/brainok/Brainok-pagewheel-mac",
+      "downloads": 1,
+      "assets": [
+        {
+          "version": "v2.0",
+          "releaseUrl": "https://github.com/brainok/Brainok-pagewheel-mac/releases/tag/v2.0",
+          "assetName": "Brainok.PageWheel.dmg",
+          "assetUrl": "https://github.com/brainok/Brainok-pagewheel-mac/releases/download/v2.0/Brainok.PageWheel.dmg",
+          "updatedAt": "2026-06-30T00:52:23Z",
+          "downloads": 1
+        }
+      ]
+    },
+    {
+      "appName": "Recent File Launcher",
+      "repoUrl": "https://github.com/brainok/Recent-File-Launcher-mac-release",
+      "downloads": 2,
+      "assets": [
+        {
+          "version": "v2.05",
+          "releaseUrl": "https://github.com/brainok/Recent-File-Launcher-mac-release/releases/tag/v2.05",
+          "assetName": "Recent.File.Launcher.dmg",
+          "assetUrl": "https://github.com/brainok/Recent-File-Launcher-mac-release/releases/download/v2.05/Recent.File.Launcher.dmg",
+          "updatedAt": "2026-07-03T20:19:38Z",
+          "downloads": 2
+        }
+      ]
+    },
+    {
+      "appName": "Signing",
+      "repoUrl": "https://github.com/brainok/Brainok-sign-mac-release",
+      "downloads": 4,
+      "assets": [
+        {
+          "version": "v2.02",
+          "releaseUrl": "https://github.com/brainok/Brainok-sign-mac-release/releases/tag/v2.02",
+          "assetName": "Brainok-Sign.dmg",
+          "assetUrl": "https://github.com/brainok/Brainok-sign-mac-release/releases/download/v2.02/Brainok-Sign.dmg",
+          "updatedAt": "2026-07-11T07:01:54Z",
+          "downloads": 4
+        }
+      ]
+    },
+    {
+      "appName": "Smart DICOM Viewer",
+      "repoUrl": "https://github.com/brainok/smart-dicom-viewer-release",
+      "downloads": 9,
+      "assets": [
+        {
+          "version": "v2.03",
+          "releaseUrl": "https://github.com/brainok/smart-dicom-viewer-release/releases/tag/v2.03",
+          "assetName": "Smart-DICOM-Viewer.dmg",
+          "assetUrl": "https://github.com/brainok/smart-dicom-viewer-release/releases/download/v2.03/Smart-DICOM-Viewer.dmg",
+          "updatedAt": "2026-07-09T04:50:22Z",
+          "downloads": 3
+        },
+        {
+          "version": "v2.02",
+          "releaseUrl": "https://github.com/brainok/smart-dicom-viewer-release/releases/tag/v2.02",
+          "assetName": "Smart-DICOM-Viewer.dmg",
+          "assetUrl": "https://github.com/brainok/smart-dicom-viewer-release/releases/download/v2.02/Smart-DICOM-Viewer.dmg",
+          "updatedAt": "2026-07-09T01:18:50Z",
+          "downloads": 4
+        },
+        {
+          "version": "v2.0",
+          "releaseUrl": "https://github.com/brainok/smart-dicom-viewer-release/releases/tag/v2.0",
+          "assetName": "Smart-DICOM-Viewer-v2.0.dmg",
+          "assetUrl": "https://github.com/brainok/smart-dicom-viewer-release/releases/download/v2.0/Smart-DICOM-Viewer-v2.0.dmg",
+          "updatedAt": "2026-07-08T10:52:03Z",
+          "downloads": 1
+        },
+        {
+          "version": "v2.01",
+          "releaseUrl": "https://github.com/brainok/smart-dicom-viewer-release/releases/tag/v2.01",
+          "assetName": "Smart-DICOM-Viewer.dmg",
+          "assetUrl": "https://github.com/brainok/smart-dicom-viewer-release/releases/download/v2.01/Smart-DICOM-Viewer.dmg",
+          "updatedAt": "2026-07-08T11:17:55Z",
+          "downloads": 1
+        }
+      ]
+    },
+    {
+      "appName": "Yonsei PDF Downloader",
+      "repoUrl": "https://github.com/brainok/Yonsei-pdf-downloader-release",
+      "downloads": 3,
+      "assets": [
+        {
+          "version": "v2.01",
+          "releaseUrl": "https://github.com/brainok/Yonsei-pdf-downloader-release/releases/tag/v2.01",
+          "assetName": "Yonsei.PDF.Downloader.dmg",
+          "assetUrl": "https://github.com/brainok/Yonsei-pdf-downloader-release/releases/download/v2.01/Yonsei.PDF.Downloader.dmg",
+          "updatedAt": "2026-06-29T03:35:08Z",
+          "downloads": 3
+        }
+      ]
+    }
+  ]
+}

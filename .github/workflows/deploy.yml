@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+  schedule:
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -31,6 +33,12 @@ jobs:
       - name: Install dependencies
         working-directory: web-netlify
         run: npm install
+
+      - name: Generate download stats
+        working-directory: web-netlify
+        env:
+          GITHUB_TOKEN: ${{ secrets.DOWNLOAD_STATS_GITHUB_TOKEN || github.token }}
+        run: node scripts/generate-download-stats.mjs
 
       - name: Build
         working-directory: web-netlify
