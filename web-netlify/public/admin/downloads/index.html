@@ -152,7 +152,7 @@
     <header>
       <div>
         <h1>Brainok GitHub Download Stats</h1>
-        <p>GitHub Release의 DMG asset 다운로드 수를 합산합니다.</p>
+        <p>Brainok Store의 public 앱에서 GitHub Release DMG asset 다운로드 수를 자동 합산합니다.</p>
       </div>
       <p id="updated">Loading...</p>
     </header>
@@ -189,16 +189,7 @@
   </main>
 
   <script>
-    const repos = [
-      "Recent-File-Launcher-mac-release",
-      "Brainok-PageWheel-mac-release",
-      "Brainok-clipboard-mac-release",
-      "Multiple-file-viewer-mac-release",
-      "Yonsei-PDF-Downloader-mac-release",
-      "Smart-dicom-viewer-mac-release"
-    ];
-
-    const owner = "brainok";
+    const firestoreProjectId = "braionk-lab";
 
     const numberFormat = new Intl.NumberFormat();
     const tbody = document.getElementById("stats");
@@ -239,14 +230,131 @@
       tbody.appendChild(row);
     }
 
+    function firestoreValue(value) {
+      if (!value) return null;
+      if ("stringValue" in value) return value.stringValue;
+      if ("integerValue" in value) return Number(value.integerValue);
+      if ("doubleValue" in value) return Number(value.doubleValue);
+      if ("booleanValue" in value) return value.booleanValue;
+      if ("timestampValue" in value) return value.timestampValue;
+      if ("nullValue" in value) return null;
+      if ("mapValue" in value) return firestoreFields(value.mapValue.fields || {});
+      if ("arrayValue" in value) return (value.arrayValue.values || []).map(firestoreValue);
+      return null;
+    }
+
+    function firestoreFields(fields) {
+      return Object.fromEntries(
+        Object.entries(fields || {}).map(([key, value]) => [key, firestoreValue(value)])
+      );
+    }
+
+    function githubRepoFromUrl(url) {
+      if (!url) return null;
+
+      try {
+        const parsed = new URL(url);
+        if (parsed.hostname !== "github.com") return null;
+
+        const [owner, repo] = parsed.pathname.split("/").filter(Boolean);
+        if (!owner || !repo) return null;
+
+        return { owner, repo };
+      } catch {
+        return null;
+      }
+    }
+
+    function appDownloadGithubRepos(apps) {
+      const repoMap = new Map();
+
+      apps
+        .filter(app => app.status === "active")
+        .filter(app => (app.appType || "application") === "application")
+        .forEach(app => {
+          const urls = [
+            app.downloads?.macUrl,
+            app.downloads?.releaseUrl
+          ];
+
+          urls.forEach(url => {
+            const githubRepo = githubRepoFromUrl(url);
+            if (!githubRepo) return;
+
+            const key = `${githubRepo.owner}/${githubRepo.repo}`;
+            const existing = repoMap.get(key);
+            if (existing) {
+              existing.apps.push(app.name || app.appId || key);
+              return;
+            }
+
+            repoMap.set(key, {
+              ...githubRepo,
+              apps: [app.name || app.appId || key]
+            });
+          });
+        });
+
+      return Array.from(repoMap.values()).sort((a, b) => {
+        const firstAppA = a.apps[0] || a.repo;
+        const firstAppB = b.apps[0] || b.repo;
+        return firstAppA.localeCompare(firstAppB);
+      });
+    }
+
+    async function loadPublicApps() {
+      const res = await fetch(`https://firestore.googleapis.com/v1/projects/${firestoreProjectId}/databases/(default)/documents:runQuery`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          structuredQuery: {
+            from: [{ collectionId: "apps" }],
+            where: {
+              fieldFilter: {
+                field: { fieldPath: "visibility" },
+                op: "EQUAL",
+                value: { stringValue: "public" }
+              }
+            }
+          }
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error(`Firestore API ${res.status}`);
+      }
+
+      const rows = await res.json();
+      return rows
+        .map(row => row.document?.fields ? firestoreFields(row.document.fields) : null)
+        .filter(Boolean);
+    }
+
     async function loadStats() {
       let totalDownloads = 0;
       let totalAssets = 0;
       let checkedRepos = 0;
+      let repos = [];
+
+      try {
+        const apps = await loadPublicApps();
+        repos = appDownloadGithubRepos(apps);
+      } catch (e) {
+        console.error("Could not load public apps", e);
+        addStatusRow("Brainok Store apps", e instanceof Error ? e.message : "Failed to load");
+      }
+
+      if (repos.length === 0) {
+        repoCount.textContent = "0 / 0";
+        updated.textContent = `Last updated: ${new Date().toLocaleString()}`;
+        return;
+      }
 
       for (const repo of repos) {
         try {
-          const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases`);
+          const res = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.repo}/releases`);
           if (!res.ok) {
             throw new Error(`GitHub API ${res.status}`);
           }
@@ -263,7 +371,7 @@
 
               const row = document.createElement("tr");
               row.append(
-                createLinkCell(repo, `https://github.com/${owner}/${repo}`),
+                createLinkCell(repo.apps.join(", "), `https://github.com/${repo.owner}/${repo.repo}`),
                 createLinkCell(release.tag_name, release.html_url),
                 createLinkCell(asset.name, asset.browser_download_url),
                 createCell(asset.updated_at ? new Date(asset.updated_at).toLocaleDateString() : "-"),
@@ -274,7 +382,7 @@
           });
         } catch (e) {
           console.error(repo, e);
-          addStatusRow(repo, e instanceof Error ? e.message : "Failed to load");
+          addStatusRow(repo.apps.join(", ") || repo.repo, e instanceof Error ? e.message : "Failed to load");
         }
       }
 
