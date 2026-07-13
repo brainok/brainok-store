@@ -1285,6 +1285,14 @@ function AppsView({
   }, [selectedApp, selectedAppId]);
 
   useEffect(() => {
+    if (!selectedApp) {
+      return;
+    }
+
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [selectedApp?.appId]);
+
+  useEffect(() => {
     if (!floatingDemoApp) {
       return;
     }
