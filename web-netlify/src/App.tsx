@@ -15,6 +15,8 @@ import {
   BookOpen,
   ChevronDown,
   Download,
+  Eye,
+  EyeOff,
   ExternalLink,
   Globe2,
   Image as ImageIcon,
@@ -205,35 +207,35 @@ const UI_TEXT = {
       oneTitle: "하나의 라이선스",
       oneBullets: ["모든 Brainok 앱을 하나로 잠금 해제", "한 번 활성화", "계속 사용"],
       anywhereTitle: "어디서나 사용",
-      anywhereBullets: ["최대 3대 Mac에서 사용", "활성화 후 오프라인 사용 가능"],
+      anywhereBullets: ["최대 3대의 Mac 또는 Windows 기기에서 사용", "활성화 후 오프라인 사용 가능"],
       plansTitle: "라이선스 선택",
       personalTitle: "Personal License",
-      personalPrice: "Mac 3대",
+      personalPrice: "Mac 또는 Windows 3대",
       personalCopy: "개인 사용자를 위한 기본 라이선스입니다.",
       personalCta: "Personal 요청",
       proTitle: "Pro License",
-      proPrice: "Mac 5대",
-      proCopy: "여러 Mac을 오가며 쓰는 사용자에게 적합합니다.",
+      proPrice: "Mac 또는 Windows 5대",
+      proCopy: "여러 Mac 또는 Windows 컴퓨터를 오가며 쓰는 사용자에게 적합합니다.",
       proCta: "Pro 요청",
       labTitle: "Lab License",
-      labPrice: "Mac 20대 이상",
+      labPrice: "Mac 또는 Windows 20대 이상",
       labCopy: "연구실, 진료실, 기관처럼 여러 컴퓨터에서 함께 사용할 때 적합합니다.",
       labCta: "Lab 요청",
       formTitle: "Brainok 라이선스 받기",
-      formIntro: "아래 내용을 보내면 관리자에게 이메일이 작성됩니다. 현재는 자동 결제 대신 관리자 확인 후 라이선스를 발급하고, activation code를 이메일로 보내는 방식입니다.",
+      formIntro: "요청을 보내시면 확인 후 활성화 코드를 이메일로 보내드립니다.",
       processTitle: "현재 발급 흐름",
       processSteps: [
         "구매자/사용자가 이 요청을 보내면 메일 앱이 열리고 admin에게 요청 메일이 갑니다.",
         "admin은 결제와 요청 내용을 확인한 뒤 Account > Brainok Licenses에서 새 Brainok License code를 생성합니다.",
-        "시스템이 생성된 코드를 Resend 이메일로 보내면, 구매자는 DMG 앱 안의 라이선스 입력 화면에 그 코드를 붙여 넣습니다.",
+        "시스템이 생성된 코드를 Resend 이메일로 보내면, 구매자는 데스크톱 앱 안의 라이선스 입력 화면에 그 코드를 붙여 넣습니다.",
         "앱은 Firebase의 activateBrainokLicense에 코드를 확인하고, 해당 기기를 라이선스에 등록합니다.",
         "성공 후 앱은 활성화 정보를 로컬에 저장해 오프라인에서도 계속 사용할 수 있습니다."
       ],
-      processNote: "DMG 앱 안에 매번 새 코드를 넣어 다시 빌드하는 구조가 아닙니다. 앱은 고정된 Firebase 연결 코드만 갖고 있고, 실제 라이선스 코드는 서버에 새로 추가됩니다.",
+      processNote: "데스크톱 앱 안에 매번 새 코드를 넣어 다시 빌드하는 구조가 아닙니다. 앱은 고정된 Firebase 연결 코드만 갖고 있고, 실제 라이선스 코드는 서버에 새로 추가됩니다.",
       formName: "이름",
       formEmail: "이메일",
       formPlan: "라이선스",
-      formDevices: "Mac 대수",
+      formDevices: "Mac 또는 Windows 기기 수",
       formMessage: "메시지",
       formCancel: "취소",
       formSubmit: "요청 보내기"
@@ -387,32 +389,32 @@ const UI_TEXT = {
       anywhereBullets: ["Available on up to 3 devices", "Works offline after activation"],
       plansTitle: "Choose Your Plan",
       personalTitle: "Personal License",
-      personalPrice: "3 Macs",
+      personalPrice: "3 Mac or Windows devices",
       personalCopy: "Ideal for personal use.",
       personalCta: "Request Personal",
       proTitle: "Pro License",
-      proPrice: "5 Macs",
-      proCopy: "For power users.",
+      proPrice: "5 Mac or Windows devices",
+      proCopy: "For people who use several Mac or Windows computers.",
       proCta: "Request Pro",
       labTitle: "Lab License",
-      labPrice: "20+ Macs",
+      labPrice: "20+ Mac or Windows devices",
       labCopy: "For research labs and organizations.",
       labCta: "Request Lab",
       formTitle: "Get Brainok License",
-      formIntro: "This opens an email request to the admin. Today, the admin confirms payment, creates the license, and the activation code is delivered by Resend email.",
+      formIntro: "Send your request and we will email you an activation code after confirmation.",
       processTitle: "Current issuing flow",
       processSteps: [
         "The buyer sends this request, which opens an email to the admin.",
         "The admin confirms the payment and request, then creates a new Brainok License code in Account > Brainok Licenses.",
-        "The system sends that generated code by Resend email, and the buyer pastes it into the license screen inside the DMG app.",
+        "The system sends that generated code by Resend email, and the buyer pastes it into the license screen inside the desktop app.",
         "The app verifies the code through Firebase activateBrainokLicense and registers that device to the license.",
         "After activation succeeds, the app stores the local activation record and can keep working offline."
       ],
-      processNote: "The DMG app does not need to be rebuilt with a new code each time. The app keeps fixed Firebase connection logic, while new license codes are added on the server.",
+      processNote: "The desktop app does not need to be rebuilt with a new code each time. The app keeps fixed Firebase connection logic, while new license codes are added on the server.",
       formName: "Name",
       formEmail: "Email",
       formPlan: "Plan",
-      formDevices: "Macs",
+      formDevices: "Mac or Windows devices",
       formMessage: "Message",
       formCancel: "Cancel",
       formSubmit: "Send Request"
@@ -821,7 +823,7 @@ function SubscriptionView({
             price={text.subscriptionPage.labPrice}
             features={[text.subscriptionPage.labCopy]}
             action={(
-              <button className="button secondary full" type="button" onClick={() => setLicenseRequestPlan(text.subscriptionPage.labTitle)}>
+              <button className="button primary full" type="button" onClick={() => setLicenseRequestPlan(text.subscriptionPage.labTitle)}>
                 {text.subscriptionPage.labCta}
               </button>
             )}
@@ -935,13 +937,6 @@ function LicenseRequestDialog({
           </button>
         </div>
         <p className="panel-copy">{text.subscriptionPage.formIntro}</p>
-        <section className="license-process">
-          <strong>{text.subscriptionPage.processTitle}</strong>
-          <ol>
-            {text.subscriptionPage.processSteps.map((step) => <li key={step}>{step}</li>)}
-          </ol>
-          <p>{text.subscriptionPage.processNote}</p>
-        </section>
         <div className="form-grid">
           <label>
             {text.subscriptionPage.formName}
@@ -2204,6 +2199,33 @@ function AccountView({
     }
   }
 
+  async function toggleSelectedAppVisibility() {
+    if (!selectedManagedApp) {
+      return;
+    }
+
+    const willHide = selectedManagedApp.visibility !== "private";
+    if (willHide && !window.confirm(`Hide ${selectedManagedApp.name} from the public board? You can publish it again at any time.`)) {
+      return;
+    }
+
+    try {
+      setBusy(true);
+      onError(null);
+      setAppSaveStatus(null);
+      const visibility = willHide ? "private" : "public";
+      await updateApp(selectedManagedApp.appId, { visibility });
+      setAppDraft((currentDraft) => ({ ...currentDraft, visibility }));
+      setAppSaveStatus(willHide
+        ? `Hidden ${selectedManagedApp.name} from the public board.`
+        : `Published ${selectedManagedApp.name} to the public board.`);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "Could not update app visibility.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function moveSelectedApp(direction: "up" | "down") {
     try {
       if (!selectedManagedApp) {
@@ -2415,7 +2437,13 @@ function AccountView({
       <div className="account-panel">
         {canManageApps ? (
           <>
-            <h2>Apps</h2>
+            <div className="account-heading">
+              <h2>Apps</h2>
+              <a className="button secondary" href="/admin/downloads/" target="_blank" rel="noreferrer">
+                <ExternalLink size={18} />
+                Download counter
+              </a>
+            </div>
             <p className="panel-copy">
               Add apps whenever you need them. Desktop apps use the universal Brainok license after their 30-day trial.
             </p>
@@ -2696,6 +2724,10 @@ function AccountView({
                   <button className="button primary" disabled={busy || !selectedManagedApp} onClick={() => void saveSelectedApp()}>
                     <Save size={18} />
                     Save app settings
+                  </button>
+                  <button className="button secondary" disabled={busy || !selectedManagedApp} onClick={() => void toggleSelectedAppVisibility()}>
+                    {selectedManagedApp?.visibility === "private" ? <Eye size={18} /> : <EyeOff size={18} />}
+                    {selectedManagedApp?.visibility === "private" ? "Publish to public board" : "Hide from public board"}
                   </button>
                   <button className="button secondary" disabled={busy || !selectedManagedApp} onClick={() => void announceSelectedApp()}>
                     <Mail size={18} />
@@ -3892,7 +3924,7 @@ function licenseRequestMailto({
     `Name: ${name}`,
     `Email: ${email}`,
     `Plan: ${plan}`,
-    `Macs: ${devices}`,
+    `Devices: ${devices}`,
     "",
     "Message:",
     message
