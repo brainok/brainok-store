@@ -59,7 +59,10 @@ function appDownloadGithubRepos(apps) {
         const key = `${githubRepo.owner}/${githubRepo.repo}`;
         const existing = repoMap.get(key);
         if (existing) {
-          existing.apps.push(app.name || app.appId || key);
+          const appName = app.name || app.appId || key;
+          if (!existing.apps.includes(appName)) {
+            existing.apps.push(appName);
+          }
           return;
         }
 
