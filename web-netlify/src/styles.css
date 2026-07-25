@@ -181,6 +181,16 @@ select {
   color: #172033;
 }
 
+.button.download-windows {
+  background: #0f766e;
+  color: #ffffff;
+}
+
+.button.download-windows:hover,
+.button.download-windows:focus-visible {
+  background: #0b5f59;
+
+}
 .button.full {
   width: 100%;
 }

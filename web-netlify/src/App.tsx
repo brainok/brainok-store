@@ -1405,7 +1405,7 @@ function AppsView({
                   <div className="download-actions">
                     {downloadLinks.length > 0 ? (
                     downloadLinks.map((downloadLink, index) => (
-                      <a className={index === 0 ? "button primary" : "button secondary"} href={downloadLink.href} key={downloadLink.label}>
+                      <a className={`${index === 0 ? "button primary" : "button secondary"}${downloadLink.kind === "windows" ? " download-windows" : ""}`} href={downloadLink.href} key={downloadLink.label}>
                         <Download size={18} />
                         {localizedDownloadLabel(downloadLink.kind, text)}
                       </a>
@@ -1693,7 +1693,7 @@ function AppDetailView({
             <div className="download-actions detail-downloads">
               {downloadLinks.length > 0 ? (
               downloadLinks.map((downloadLink, index) => (
-                <a className={index === 0 ? "button primary" : "button secondary"} href={downloadLink.href} key={downloadLink.label}>
+                <a className={`${index === 0 ? "button primary" : "button secondary"}${downloadLink.kind === "windows" ? " download-windows" : ""}`} href={downloadLink.href} key={downloadLink.label}>
                   <Download size={18} />
                   {localizedDownloadLabel(downloadLink.kind, text)}
                 </a>
@@ -1985,7 +1985,7 @@ function DownloadView({
                 <div className="download-actions">
                   {downloadLinks.length > 0 ? (
                     downloadLinks.map((downloadLink, index) => (
-                      <a className={index === 0 ? "button primary" : "button secondary"} href={downloadLink.href} key={downloadLink.label}>
+                      <a className={`${index === 0 ? "button primary" : "button secondary"}${downloadLink.kind === "windows" ? " download-windows" : ""}`} href={downloadLink.href} key={downloadLink.label}>
                         <Download size={18} />
                         {localizedDownloadLabel(downloadLink.kind, text)}
                       </a>
