@@ -2477,6 +2477,20 @@ textarea {
   width: 100%;
 }
 
+.download-actions > :only-child {
+  grid-column: 1 / -1;
+}
+
+.download-label {
+  display: inline-flex;
+}
+
+.download-label-windows {
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.05;
+}
+
 .app-detail-page {
   display: grid;
   gap: 18px;
@@ -2899,15 +2913,7 @@ dd {
     padding: 20px;
   }
 
-  .detail-downloads {
-    grid-template-columns: 1fr;
-  }
-
   .app-board {
-    grid-template-columns: 1fr;
-  }
-
-  .download-actions {
     grid-template-columns: 1fr;
   }
 

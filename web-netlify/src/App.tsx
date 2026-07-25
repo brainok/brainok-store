@@ -372,7 +372,7 @@ const UI_TEXT = {
       freeDownloads: "Free downloads",
       buildSoon: "Build soon",
       note: "Download free. No account required. The app starts a 30-day trial and accepts a Brainok license inside the app.",
-      downloadWin: "Download Win",
+      downloadWin: "Windows Download",
       downloadMac: "Download Mac",
       releasePage: "Release page"
     },
@@ -3887,12 +3887,12 @@ function appDownloadLinks(app: BrainokApp) {
     return links;
   }
 
-  if (app.downloads?.windowsUrl) {
-    links.push({ kind: "windows", label: "Download Win", href: app.downloads.windowsUrl });
-  }
-
   if (app.downloads?.macUrl) {
     links.push({ kind: "mac", label: "Download Mac", href: app.downloads.macUrl });
+  }
+
+  if (app.downloads?.windowsUrl) {
+    links.push({ kind: "windows", label: "Download Win", href: app.downloads.windowsUrl });
   }
 
   if (links.length === 0 && app.downloads?.releaseUrl) {
@@ -3933,9 +3933,16 @@ function licenseRequestMailto({
   return `mailto:${SUBSCRIPTION_REQUEST_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
-function localizedDownloadLabel(kind: DownloadLinkKind, text: UiText) {
+function localizedDownloadLabel(kind: DownloadLinkKind, text: UiText): ReactNode {
   if (kind === "windows") {
-    return text.download.downloadWin;
+    const [platform, ...action] = text.download.downloadWin.split(" ");
+
+    return (
+      <span className="download-label download-label-windows">
+        <span>{platform}</span>
+        <span>{action.join(" ")}</span>
+      </span>
+    );
   }
 
   if (kind === "mac") {
