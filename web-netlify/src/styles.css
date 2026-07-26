@@ -189,8 +189,8 @@ select {
 .button.download-windows:hover,
 .button.download-windows:focus-visible {
   background: #0b5f59;
-
 }
+
 .button.full {
   width: 100%;
 }
@@ -1118,6 +1118,222 @@ select {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+}
+
+.payment-panel {
+  display: grid;
+  gap: 16px;
+  border: 1px solid #dce3ef;
+  border-radius: 8px;
+  padding: 20px;
+  background: #fbfcfe;
+}
+
+.payment-header,
+.order-card-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+}
+
+.payment-header h3,
+.paypal-checkout-box h4 {
+  margin: 4px 0 8px;
+  color: #101827;
+}
+
+.payment-header p,
+.paypal-checkout-box p,
+.bank-account-box p,
+.order-result-card p {
+  margin: 0;
+  color: #536174;
+  line-height: 1.6;
+}
+
+.payment-header strong {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  border-radius: 8px;
+  padding: 0 14px;
+  background: #e6f4ea;
+  color: #137333;
+  font-size: 18px;
+}
+
+.region-selector {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.license-option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.region-selector label,
+.license-option-grid label,
+.agreement-row {
+  display: flex;
+  align-items: center;
+}
+
+.region-selector label {
+  min-height: 52px;
+  gap: 10px;
+  border: 1px solid #dce3ef;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #ffffff;
+  color: #172033;
+  cursor: pointer;
+}
+
+.license-option-grid label {
+  min-height: 76px;
+  gap: 12px;
+  border: 1px solid #dce3ef;
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: #ffffff;
+  color: #172033;
+  cursor: pointer;
+}
+
+.region-selector label.active {
+  border-color: #174ea6;
+  background: #eef4ff;
+  color: #174ea6;
+}
+
+.license-option-grid label.active {
+  border-color: #174ea6;
+  background: #eef4ff;
+}
+
+.license-option-grid span {
+  display: grid;
+  gap: 4px;
+}
+
+.license-option-grid strong {
+  color: #172033;
+  font-size: 17px;
+}
+
+.license-option-grid small {
+  color: #174ea6;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.region-selector input,
+.license-option-grid input,
+.agreement-row input {
+  width: auto;
+}
+
+.payment-method-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr);
+  gap: 14px;
+}
+
+.bank-account-box,
+.payment-form-box,
+.paypal-checkout-box,
+.order-result-card,
+.order-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #dce3ef;
+  border-radius: 8px;
+  padding: 16px;
+  background: #ffffff;
+}
+
+.bank-account-box dl,
+.order-result-card dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.bank-account-box dl div,
+.order-result-card dl div {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.bank-account-box dt,
+.order-result-card dt {
+  color: #64748b;
+  font-weight: 800;
+}
+
+.bank-account-box dd,
+.order-result-card dd {
+  margin: 0;
+  color: #172033;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.agreement-row {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  color: #455366;
+  line-height: 1.5;
+}
+
+.paypal-checkout-box {
+  max-width: 760px;
+}
+
+.paypal-buttons {
+  min-height: 48px;
+}
+
+.order-result-heading {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: #137333;
+}
+
+.order-admin-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.order-filter-form {
+  grid-template-columns: minmax(220px, 320px) auto;
+}
+
+.order-list {
+  display: grid;
+  gap: 12px;
+}
+
+.order-card code {
+  display: block;
+  margin: 6px 0;
+  color: #172033;
+  font-size: 17px;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.order-card small {
+  display: block;
+  color: #64748b;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .modal-backdrop {
@@ -2795,10 +3011,16 @@ dd {
   .media-editor,
   .subscription-flow,
   .subscription-plan-grid,
+  .region-selector,
+  .license-option-grid,
+  .payment-method-grid,
+  .payment-header,
   .license-admin-grid,
   .compact-editor-grid,
   .license-card-main,
   .license-activation-row,
+  .order-card-main,
+  .order-filter-form,
   .support-detail-layout,
   .login-mode-switch,
   .upload-strip,

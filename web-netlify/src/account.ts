@@ -147,6 +147,50 @@ export interface LicenseSummary {
   activations: LicenseActivationSummary[];
 }
 
+export type BrainokOrderStatus = "awaiting_payment" | "paid" | "completed" | "cancelled" | "failed";
+export type BrainokPaymentMethod = "bank_transfer" | "paypal";
+
+export interface BrainokStoreConfig {
+  plans: Array<{
+    id: "lifetime_2" | "lifetime_5";
+    name: string;
+    maxDevices: number;
+    amount: number;
+    currency: string;
+    label: string;
+    paypalAmount?: number;
+    paypalCurrency?: string;
+    paypalLabel?: string;
+  }>;
+  bank: {
+    bankName: string;
+    accountNumber: string;
+    accountHolder: string;
+  };
+  paypal: {
+    clientId: string | null;
+    currency: string;
+    environment: "sandbox" | "live";
+  };
+  supportEmail: string;
+}
+
+export interface BrainokOrderSummary {
+  orderId: string;
+  email: string;
+  depositorName?: string | null;
+  amount: number;
+  currency: string;
+  status: BrainokOrderStatus;
+  paymentMethod: BrainokPaymentMethod;
+  paypalOrderId?: string | null;
+  licenseId?: string | null;
+  licenseCode?: string | null;
+  createdAt: string | null;
+  paidAt?: string | null;
+  completedAt?: string | null;
+}
+
 export interface BrainokApp {
   appId: string;
   name: string;
@@ -353,6 +397,98 @@ export async function requestBrainokLicense(input: {
     mailLogId?: string;
     errorMessage?: string;
   };
+}
+
+export async function getBrainokStoreConfig() {
+  const result = await httpsCallable(functions, "getBrainokStoreConfig")({});
+  return result.data as BrainokStoreConfig;
+}
+
+export async function createBankTransferOrder(input: {
+  email: string;
+  depositorName: string;
+  planId: "lifetime_2" | "lifetime_5";
+  agreementAccepted: boolean;
+}) {
+  const result = await httpsCallable(functions, "createBankTransferOrder")(input);
+  return result.data as {
+    ok: true;
+    order: BrainokOrderSummary;
+    orderEmailDelivery?: {
+      status: "sent" | "failed" | "skipped";
+      to?: string | null;
+      errorMessage?: string;
+    };
+    adminOrderEmailDelivery?: {
+      status: "sent" | "failed" | "skipped";
+      to?: string | null;
+      errorMessage?: string;
+    };
+    bank: BrainokStoreConfig["bank"];
+    instructions: string;
+  };
+}
+
+export async function createPayPalOrder(input: {
+  email: string;
+  planId: "lifetime_2" | "lifetime_5";
+  agreementAccepted: boolean;
+}) {
+  const result = await httpsCallable(functions, "createPayPalOrder")(input);
+  return result.data as {
+    ok: true;
+    orderId: string;
+    paypalOrderId: string;
+  };
+}
+
+export async function capturePayPalOrder(input: {
+  orderId: string;
+  paypalOrderId: string;
+}) {
+  const result = await httpsCallable(functions, "capturePayPalOrder")(input);
+  return result.data as {
+    ok: true;
+    order: BrainokOrderSummary;
+    license: {
+      licenseId: string;
+      licenseCode: string;
+      email: string | null;
+    };
+    emailDelivery?: {
+      status: "sent" | "failed" | "skipped";
+      to: string | null;
+      errorMessage?: string;
+    };
+  };
+}
+
+export async function listOrders(status = "all") {
+  const result = await httpsCallable(functions, "listOrders")({ status });
+  return (result.data as { orders: BrainokOrderSummary[] }).orders;
+}
+
+export async function approveBankTransferOrder(orderId: string) {
+  const result = await httpsCallable(functions, "approveBankTransferOrder")({ orderId });
+  return result.data as {
+    ok: true;
+    order: BrainokOrderSummary;
+    license: {
+      licenseId: string;
+      licenseCode: string;
+      email: string | null;
+    };
+    emailDelivery?: {
+      status: "sent" | "failed" | "skipped";
+      to: string | null;
+      errorMessage?: string;
+    };
+  };
+}
+
+export async function cancelOrder(orderId: string) {
+  const result = await httpsCallable(functions, "cancelOrder")({ orderId });
+  return result.data as { ok: true; orderId: string; status: "cancelled" };
 }
 
 export async function listLicenses(search = "") {
