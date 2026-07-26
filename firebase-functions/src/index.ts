@@ -15,6 +15,7 @@ import {
   onRequest
 } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
+import { storeConfigDefaults } from "./store-config.js";
 
 initializeApp();
 
@@ -23,6 +24,8 @@ const auth = getAuth();
 const region = process.env.FUNCTION_REGION || "asia-northeast3";
 const qnaSmtpPassword = defineSecret("QNA_SMTP_PASSWORD");
 const resendApiKey = defineSecret("RESEND_API_KEY");
+const paypalClientId = defineSecret("PAYPAL_CLIENT_ID");
+const paypalSecret = defineSecret("PAYPAL_SECRET");
 const adminEmail = "brainok777@gmail.com";
 const defaultLicenseFromEmail = "Brainok Licensing <licenses@brainok.net>";
 
@@ -36,13 +39,19 @@ type AppBillingInterval = "one_time" | "monthly" | "yearly" | "pay_what_you_want
 type ActivationStatus = "not_found" | "trial" | "active" | "expired" | "revoked";
 type BrainokLicensePlan = "personal" | "pro" | "lab" | "friend";
 type BrainokLicenseStatus = "active" | "disabled" | "expired";
+type BrainokLicenseType = "lifetime";
 type ResendMailType =
   | "license_delivery"
   | "license_resend"
   | "license_test"
   | "license_request"
+  | "order_confirmation"
+  | "order_admin_notification"
   | "app_announcement";
-type PaymentProviderId = "manual" | "toss" | "legacy_external";
+type PaymentProviderId = "manual" | "bank_transfer" | "paypal" | "toss" | "legacy_external";
+type BrainokPaymentMethod = "bank_transfer" | "paypal";
+type BrainokOrderStatus = "awaiting_payment" | "paid" | "completed" | "cancelled" | "failed";
+type BrainokLifetimePlanId = "lifetime_2" | "lifetime_5";
 type PaymentStatus =
   | "created"
   | "pending"
@@ -65,6 +74,18 @@ const paymentProviders: Record<PaymentProviderId, PaymentProvider> = {
     id: "manual",
     displayName: "Manual",
     supportsCheckout: false,
+    supportsWebhooks: false
+  },
+  bank_transfer: {
+    id: "bank_transfer",
+    displayName: "Bank Transfer",
+    supportsCheckout: false,
+    supportsWebhooks: false
+  },
+  paypal: {
+    id: "paypal",
+    displayName: "PayPal Checkout",
+    supportsCheckout: true,
     supportsWebhooks: false
   },
   toss: {
@@ -343,12 +364,266 @@ function secretOrEnv(secret: ReturnType<typeof defineSecret>, envName: string): 
   }
 }
 
+function envString(name: string, fallback: string): string {
+  const value = process.env[name];
+  return value && value.trim().length > 0 ? value.trim() : fallback;
+}
+
+function envNumber(names: string[], fallback: number): number {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value && value.trim().length > 0) {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) {
+        return Math.max(0, parsed);
+      }
+    }
+  }
+
+  return fallback;
+}
+
+function supportEmail(): string {
+  return envString("SUPPORT_EMAIL", storeConfigDefaults.supportEmail || adminEmail);
+}
+
+function bankTransferConfig() {
+  return {
+    bankName: envString("BANK_NAME", storeConfigDefaults.bankTransfer.bankName),
+    accountNumber: envString("BANK_ACCOUNT_NUMBER", storeConfigDefaults.bankTransfer.accountNumber),
+    accountHolder: envString("BANK_ACCOUNT_HOLDER", storeConfigDefaults.bankTransfer.accountHolder)
+  };
+}
+
+function bankTransferOrderEmailContent({
+  orderId,
+  depositorName,
+  amount,
+  currency,
+  maxDevices,
+  bank
+}: {
+  orderId: string;
+  depositorName: string;
+  amount: number;
+  currency: string;
+  maxDevices: number;
+  bank: ReturnType<typeof bankTransferConfig>;
+}) {
+  const amountLabel = formatMoney(amount, currency);
+  const support = supportEmail();
+  const subject = `[Brainok Store] 계좌이체 주문 안내 ${orderId}`;
+  const text = [
+    "Brainok Lifetime License 주문이 생성되었습니다.",
+    "",
+    `주문번호: ${orderId}`,
+    `입금자명: ${depositorName}`,
+    `라이선스: ${maxDevices}대 기기`,
+    `금액: ${amountLabel}`,
+    "",
+    `은행: ${bank.bankName}`,
+    `계좌번호: ${bank.accountNumber}`,
+    `예금주: ${bank.accountHolder}`,
+    "",
+    "위 계좌로 입금해 주세요. 입금 확인 후 Brainok Lifetime License가 자동 발급되고 이메일로 전송됩니다.",
+    `문의: ${support}`
+  ].join("\n");
+  const row = (label: string, value: string) => [
+    '<tr>',
+    `<th style="text-align:left;padding:10px 12px;border-bottom:1px solid #e5edf7;color:#536174;width:120px">${htmlEscape(label)}</th>`,
+    `<td style="padding:10px 12px;border-bottom:1px solid #e5edf7;color:#0f1f3a;font-weight:700">${htmlEscape(value)}</td>`,
+    "</tr>"
+  ].join("");
+  const html = [
+    '<div style="margin:0;padding:28px;background:#f5f8fc;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#0f1f3a">',
+    '<div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #d9e2ef;border-radius:18px;overflow:hidden">',
+    '<div style="padding:26px 28px;border-bottom:1px solid #e5edf7">',
+    '<p style="margin:0 0 8px;color:#174ea6;font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase">Brainok Store</p>',
+    '<h1 style="margin:0;font-size:24px;line-height:1.3">계좌이체 주문이 생성되었습니다.</h1>',
+    '</div>',
+    '<div style="padding:26px 28px">',
+    '<p style="margin:0 0 18px;color:#536174;line-height:1.65">아래 주문번호와 금액을 확인한 뒤 입금해 주세요. 입금 확인 후 Brainok Lifetime License가 이메일로 발급됩니다.</p>',
+    '<table style="width:100%;border-collapse:collapse;background:#fbfdff;border:1px solid #e5edf7;border-radius:12px;overflow:hidden">',
+    row("주문번호", orderId),
+    row("입금자명", depositorName),
+    row("라이선스", `${maxDevices}대 기기`),
+    row("금액", amountLabel),
+    row("은행", bank.bankName),
+    row("계좌번호", bank.accountNumber),
+    row("예금주", bank.accountHolder),
+    '</table>',
+    `<p style="margin:22px 0 0;color:#536174;font-size:13px">문의: <a href="mailto:${htmlAttribute(support)}" style="color:#174ea6">${htmlEscape(support)}</a></p>`,
+    '</div>',
+    '</div>',
+    '</div>'
+  ].join("");
+
+  return { subject, text, html };
+}
+
+function bankTransferAdminEmailContent({
+  orderId,
+  buyerEmail,
+  depositorName,
+  amount,
+  currency,
+  maxDevices,
+  bank
+}: {
+  orderId: string;
+  buyerEmail: string;
+  depositorName: string;
+  amount: number;
+  currency: string;
+  maxDevices: number;
+  bank: ReturnType<typeof bankTransferConfig>;
+}) {
+  const amountLabel = formatMoney(amount, currency);
+  const adminUrl = "https://store.brainok.net/admin/orders";
+  const subject = `[Brainok Store] 새 계좌이체 주문 ${orderId}`;
+  const text = [
+    "새 계좌이체 주문이 생성되었습니다.",
+    "",
+    `주문번호: ${orderId}`,
+    `구매자 이메일: ${buyerEmail}`,
+    `입금자명: ${depositorName}`,
+    `라이선스: ${maxDevices}대 기기`,
+    `금액: ${amountLabel}`,
+    "",
+    `은행: ${bank.bankName}`,
+    `계좌번호: ${bank.accountNumber}`,
+    `예금주: ${bank.accountHolder}`,
+    "",
+    `관리자 주문 페이지: ${adminUrl}`
+  ].join("\n");
+  const row = (label: string, value: string) => [
+    '<tr>',
+    `<th style="text-align:left;padding:10px 12px;border-bottom:1px solid #e5edf7;color:#536174;width:140px">${htmlEscape(label)}</th>`,
+    `<td style="padding:10px 12px;border-bottom:1px solid #e5edf7;color:#0f1f3a;font-weight:700">${htmlEscape(value)}</td>`,
+    "</tr>"
+  ].join("");
+  const html = [
+    '<div style="margin:0;padding:28px;background:#f5f8fc;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#0f1f3a">',
+    '<div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #d9e2ef;border-radius:18px;overflow:hidden">',
+    '<div style="padding:26px 28px;border-bottom:1px solid #e5edf7">',
+    '<p style="margin:0 0 8px;color:#174ea6;font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase">Brainok Store Admin</p>',
+    '<h1 style="margin:0;font-size:24px;line-height:1.3">새 계좌이체 주문이 생성되었습니다.</h1>',
+    '</div>',
+    '<div style="padding:26px 28px">',
+    '<table style="width:100%;border-collapse:collapse;background:#fbfdff;border:1px solid #e5edf7;border-radius:12px;overflow:hidden">',
+    row("주문번호", orderId),
+    row("구매자 이메일", buyerEmail),
+    row("입금자명", depositorName),
+    row("라이선스", `${maxDevices}대 기기`),
+    row("금액", amountLabel),
+    row("은행", bank.bankName),
+    row("계좌번호", bank.accountNumber),
+    row("예금주", bank.accountHolder),
+    '</table>',
+    `<p style="margin:24px 0 0"><a href="${htmlAttribute(adminUrl)}" style="display:inline-block;background:#174ea6;color:#ffffff;text-decoration:none;border-radius:12px;padding:13px 18px;font-weight:800">Open Admin Orders</a></p>`,
+    '</div>',
+    '</div>',
+    '</div>'
+  ].join("");
+
+  return { subject, text, html };
+}
+
+function formatMoney(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat("en", {
+      style: "currency",
+      currency,
+      currencyDisplay: "narrowSymbol",
+      maximumFractionDigits: currency === "KRW" ? 0 : 2
+    }).format(amount);
+  } catch {
+    return `${amount} ${currency}`;
+  }
+}
+
+function lifetimePlanId(value: unknown): BrainokLifetimePlanId {
+  return oneOf<BrainokLifetimePlanId>(
+    value,
+    ["lifetime_2", "lifetime_5"],
+    "lifetime_2"
+  );
+}
+
+function lifetimePlans() {
+  return storeConfigDefaults.lifetimePlans.map((plan) => {
+    const amount = envNumber(
+      [
+        `BRAINOK_${plan.id.toUpperCase()}_AMOUNT`,
+        `BRAINOK_${plan.id.toUpperCase()}_PRICE`,
+        `BRAINOK_LIFETIME_PRICE_${plan.maxDevices}_DEVICES`
+      ],
+      plan.amount
+    );
+    const currency = normalizeCurrency(
+      process.env[`BRAINOK_${plan.id.toUpperCase()}_CURRENCY`] ||
+        process.env.BRAINOK_LIFETIME_PRICE_CURRENCY ||
+        plan.currency,
+      plan.currency
+    );
+    const paypalAmount = envNumber(
+      [
+        `PAYPAL_${plan.id.toUpperCase()}_AMOUNT`,
+        `PAYPAL_${plan.id.toUpperCase()}_PRICE`,
+        `BRAINOK_PAYPAL_PRICE_${plan.maxDevices}_DEVICES`
+      ],
+      plan.paypalAmount
+    );
+    const paypalCurrency = normalizeCurrency(
+      process.env[`PAYPAL_${plan.id.toUpperCase()}_CURRENCY`] ||
+        process.env.BRAINOK_PAYPAL_CURRENCY ||
+        plan.paypalCurrency,
+      plan.paypalCurrency
+    );
+
+    return {
+      ...plan,
+      amount,
+      currency,
+      label: formatMoney(amount, currency),
+      paypalAmount,
+      paypalCurrency,
+      paypalLabel: formatMoney(paypalAmount, paypalCurrency)
+    };
+  });
+}
+
+function lifetimePlan(value: unknown) {
+  const planId = lifetimePlanId(value);
+  return lifetimePlans().find((plan) => plan.id === planId) || lifetimePlans()[0];
+}
+
+function paypalConfig() {
+  const environment = oneOf<"sandbox" | "live">(
+    process.env.PAYPAL_ENVIRONMENT,
+    ["sandbox", "live"],
+    "live"
+  );
+
+  return {
+    clientId: asString(process.env.PAYPAL_CLIENT_ID) || asString(paypalClientId.value()) || null,
+    currency: lifetimePlan("lifetime_2").paypalCurrency,
+    environment
+  };
+}
+
+function paypalApiBase(): string {
+  return paypalConfig().environment === "live"
+    ? "https://api-m.paypal.com"
+    : "https://api-m.sandbox.paypal.com";
+}
+
 function resendFromEmail(): string {
   return process.env.RESEND_FROM_EMAIL || defaultLicenseFromEmail;
 }
 
 function resendReplyToEmail(): string {
-  return process.env.RESEND_REPLY_TO_EMAIL || adminEmail;
+  return process.env.RESEND_REPLY_TO_EMAIL || supportEmail();
 }
 
 function testLicenseCode(): string {
@@ -358,46 +633,48 @@ function testLicenseCode(): string {
 
 function licenseEmailContent({
   licenseCode,
-  plan,
   maxDevices,
   recipientName
 }: {
   licenseCode: string;
-  plan: BrainokLicensePlan;
   maxDevices: number;
   recipientName?: string | null;
 }) {
-  const subject = "Your Brainok License";
+  const subject = "Your Brainok Lifetime License";
   const greeting = recipientName ? `Hello ${recipientName},` : "Hello,";
+  const support = supportEmail();
   const text = [
     greeting,
     "",
     "Thank you for supporting Brainok.",
-    "Your activation code:",
+    "Your Brainok Lifetime License activation code:",
     licenseCode,
     "",
-    `Plan: ${plan}`,
+    "License: Brainok Lifetime License",
     `Device limit: ${maxDevices}`,
+    "Expiration: none",
     "",
+    "This single license activates every Brainok desktop application.",
     "Download any Brainok app for free, use the 30-day trial, then enter this license code inside the app.",
     "Activation requires Internet once. After activation, the app can keep working offline.",
     "",
-    `Support: ${adminEmail}`
+    `Support: ${support}`
   ].join("\n");
   const html = [
     `<p>${htmlEscape(greeting)}</p>`,
     "<p>Thank you for supporting Brainok.</p>",
-    "<h1>Your Brainok License</h1>",
-    "<p>Use this license code inside any Brainok app after the 30-day trial.</p>",
+    "<h1>Your Brainok Lifetime License</h1>",
+    "<p>This single license activates every Brainok desktop application.</p>",
     "<p><strong>Your activation code:</strong></p>",
     `<p><code>${htmlEscape(licenseCode)}</code></p>`,
     "<ul>",
-    `<li>Plan: ${htmlEscape(plan)}</li>`,
+    "<li>License: Brainok Lifetime License</li>",
     `<li>Device limit: ${maxDevices}</li>`,
+    "<li>Expiration: none</li>",
     "<li>Activation requires Internet once.</li>",
     "<li>After activation, Brainok apps can keep working offline.</li>",
     "</ul>",
-    `<p>Support: <a href="mailto:${adminEmail}">${adminEmail}</a></p>`
+    `<p>Support: <a href="mailto:${support}">${support}</a></p>`
   ].join("");
 
   return { subject, text, html };
@@ -667,8 +944,7 @@ async function sendResendTestLicenseEmail(requestedByUid?: string | null): Promi
   const licenseCode = testLicenseCode();
   const content = licenseEmailContent({
     licenseCode,
-    plan: "personal",
-    maxDevices: 3
+    maxDevices: 2
   });
   const result = await sendResendEmail({
     to: adminEmail,
@@ -789,7 +1065,7 @@ function sha256(input: string | Buffer): string {
 function paymentProvider(value: unknown): PaymentProvider {
   const id = oneOf<PaymentProviderId>(
     value,
-    ["manual", "toss", "legacy_external"],
+    ["manual", "bank_transfer", "paypal", "toss", "legacy_external"],
     "manual"
   );
   return paymentProviders[id];
@@ -850,6 +1126,662 @@ async function writePaymentRecord({
 
   return paymentRef.id;
 }
+
+function generateOrderId(): string {
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const raw = crypto.randomBytes(3).toString("hex").toUpperCase();
+  return `BRN-${today}-${raw}`;
+}
+
+function timestampIso(value: unknown): string | null {
+  return value instanceof Timestamp ? value.toDate().toISOString() : null;
+}
+
+function publicOrder(orderId: string, order: Record<string, unknown>) {
+  return {
+    orderId,
+    email: asString(order.email) || "",
+    depositorName: asString(order.depositorName) || null,
+    amount: Math.max(0, Number(order.amount || 0)),
+    currency: asString(order.currency) || "USD",
+    status: oneOf<BrainokOrderStatus>(
+      order.status,
+      ["awaiting_payment", "paid", "completed", "cancelled", "failed"],
+      "awaiting_payment"
+    ),
+    paymentMethod: oneOf<BrainokPaymentMethod>(
+      order.paymentMethod,
+      ["bank_transfer", "paypal"],
+      "bank_transfer"
+    ),
+    paypalOrderId: asString(order.paypalOrderId) || null,
+    licenseId: asString(order.licenseId) || null,
+    licenseCode: asString(order.licenseCode) || null,
+    createdAt: timestampIso(order.createdAt),
+    paidAt: timestampIso(order.paidAt),
+    completedAt: timestampIso(order.completedAt)
+  };
+}
+
+function validateBuyerEmail(value: unknown): string {
+  const email = asString(value);
+  if (!email || !emailLower(email) || !email.includes("@")) {
+    throw new HttpsError("invalid-argument", "A valid email address is required.");
+  }
+
+  return email;
+}
+
+function requireAgreement(value: unknown): void {
+  if (value !== true) {
+    throw new HttpsError("invalid-argument", "You must accept the payment and license terms.");
+  }
+}
+
+async function paypalAccessToken(): Promise<string> {
+  const { clientId } = paypalConfig();
+  const secret = asString(process.env.PAYPAL_SECRET) || asString(paypalSecret.value());
+
+  if (!clientId || !secret) {
+    throw new HttpsError("failed-precondition", "PayPal credentials are not configured.");
+  }
+
+  const credentials = Buffer.from(`${clientId}:${secret}`).toString("base64");
+  const response = await fetch(`${paypalApiBase()}/v1/oauth2/token`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: "grant_type=client_credentials"
+  });
+  const payload = await response.json() as Record<string, unknown>;
+
+  if (!response.ok) {
+    console.error("PayPal token request failed", payload);
+    throw new HttpsError("internal", "Could not authenticate with PayPal.");
+  }
+
+  const token = asString(payload.access_token);
+  if (!token) {
+    throw new HttpsError("internal", "PayPal token response was invalid.");
+  }
+
+  return token;
+}
+
+function paypalAmountValue(amount: number, currency: string): string {
+  return currency === "JPY" || currency === "KRW"
+    ? String(Math.round(amount))
+    : amount.toFixed(2);
+}
+
+async function paypalJson<T>({
+  path,
+  method,
+  body
+}: {
+  path: string;
+  method: "GET" | "POST";
+  body?: Record<string, unknown>;
+}): Promise<T> {
+  const token = await paypalAccessToken();
+  const response = await fetch(`${paypalApiBase()}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation"
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const payload = await response.json() as T & Record<string, unknown>;
+
+  if (!response.ok) {
+    console.error("PayPal API request failed", method, path, payload);
+    throw new HttpsError("internal", "PayPal payment could not be processed.");
+  }
+
+  return payload;
+}
+
+async function completePaidOrder({
+  orderId,
+  paidBy,
+  paymentProvider,
+  providerPaymentId,
+  rawPayload
+}: {
+  orderId: string;
+  paidBy: string | null;
+  paymentProvider: PaymentProviderId;
+  providerPaymentId?: string;
+  rawPayload?: unknown;
+}) {
+  const orderRef = db.collection("orders").doc(orderId);
+  const orderSnap = await orderRef.get();
+  if (!orderSnap.exists) {
+    throw new HttpsError("not-found", "Order does not exist.");
+  }
+
+  const order = orderSnap.data() || {};
+  const currentStatus = oneOf<BrainokOrderStatus>(
+    order.status,
+    ["awaiting_payment", "paid", "completed", "cancelled", "failed"],
+    "awaiting_payment"
+  );
+
+  if (currentStatus === "completed" && asString(order.licenseCode)) {
+    return {
+      order: publicOrder(orderId, order),
+      license: {
+        licenseId: asString(order.licenseId) || "",
+        licenseCode: asString(order.licenseCode) || "",
+        email: asString(order.email) || null
+      },
+      emailDelivery: {
+        status: "skipped" as const,
+        to: asString(order.email) || null
+      }
+    };
+  }
+
+  if (currentStatus === "cancelled") {
+    throw new HttpsError("failed-precondition", "This order has been cancelled.");
+  }
+
+  await orderRef.set(
+    {
+      status: "paid" satisfies BrainokOrderStatus,
+      paidAt: FieldValue.serverTimestamp(),
+      paidBy,
+      updatedAt: FieldValue.serverTimestamp()
+    },
+    { merge: true }
+  );
+
+  const paymentId = await writePaymentRecord({
+    provider: paymentProvider,
+    status: "paid",
+    email: asString(order.email),
+    amountCents: Math.round(Number(order.amount || 0) * 100),
+    currency: asString(order.currency) || "USD",
+    orderId,
+    providerPaymentId,
+    rawPayload
+  });
+
+  const issued = await issueBrainokLifetimeLicense({
+    email: asString(order.email),
+    buyerName: asString(order.depositorName) || null,
+    maxDevices: Math.max(1, Number(order.maxDevices || order.maxActivations || 2)),
+    source: paymentProvider,
+    issuedBy: paidBy,
+    paymentId,
+    orderId
+  });
+
+  await orderRef.set(
+    {
+      status: "completed" satisfies BrainokOrderStatus,
+      licenseId: issued.licenseId,
+      licenseCode: issued.licenseCode,
+      emailDeliveryStatus: issued.emailDelivery.status,
+      completedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    },
+    { merge: true }
+  );
+
+  const completedSnap = await orderRef.get();
+
+  return {
+    order: publicOrder(orderId, completedSnap.data() || {}),
+    license: {
+      licenseId: issued.licenseId,
+      licenseCode: issued.licenseCode,
+      email: issued.email
+    },
+    emailDelivery: issued.emailDelivery
+  };
+}
+
+export const getBrainokStoreConfig = onCall({ region, secrets: [paypalClientId] }, async () => {
+  return {
+    plans: lifetimePlans(),
+    bank: bankTransferConfig(),
+    paypal: paypalConfig(),
+    supportEmail: supportEmail()
+  };
+});
+
+export const createBankTransferOrder = onCall({ region, secrets: [resendApiKey] }, async (request) => {
+  const data = (request.data || {}) as Record<string, unknown>;
+  const email = validateBuyerEmail(data.email);
+  const depositorName = textField(data.depositorName, "", 120).trim();
+  const plan = lifetimePlan(data.planId);
+  requireAgreement(data.agreementAccepted);
+
+  if (!depositorName) {
+    throw new HttpsError("invalid-argument", "Depositor name is required.");
+  }
+
+  const orderId = generateOrderId();
+  const orderRef = db.collection("orders").doc(orderId);
+  await orderRef.create({
+    orderId,
+    email,
+    emailLower: emailLower(email),
+    depositorName,
+    amount: plan.amount,
+    currency: plan.currency,
+    status: "awaiting_payment" satisfies BrainokOrderStatus,
+    paymentMethod: "bank_transfer" satisfies BrainokPaymentMethod,
+    licenseType: "lifetime" satisfies BrainokLicenseType,
+    planId: plan.id,
+    maxDevices: plan.maxDevices,
+    maxActivations: plan.maxDevices,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp()
+  });
+
+  let orderEmailDelivery: Record<string, unknown> = {
+    status: "skipped"
+  };
+  let adminOrderEmailDelivery: Record<string, unknown> = {
+    status: "skipped"
+  };
+  const bank = bankTransferConfig();
+
+  try {
+    const content = bankTransferOrderEmailContent({
+      orderId,
+      depositorName,
+      amount: plan.amount,
+      currency: plan.currency,
+      maxDevices: plan.maxDevices,
+      bank
+    });
+    const emailResult = await sendResendEmail({
+      to: email,
+      ...content,
+      requestId: orderId,
+      type: "order_confirmation"
+    });
+
+    orderEmailDelivery = {
+      status: "sent",
+      to: email,
+      ...emailResult
+    };
+    await orderRef.set(
+      {
+        orderEmailDeliveryStatus: "sent",
+        orderEmailedAt: FieldValue.serverTimestamp(),
+        orderMailLogId: emailResult.mailLogId,
+        orderEmailError: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not send order confirmation email.";
+    orderEmailDelivery = {
+      status: "failed",
+      to: email,
+      errorMessage: message
+    };
+    await orderRef.set(
+      {
+        orderEmailDeliveryStatus: "failed",
+        orderEmailError: message.slice(0, 500),
+        updatedAt: FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
+  }
+
+  const adminOrderEmail = supportEmail();
+  if (emailLower(adminOrderEmail) !== emailLower(email)) {
+    try {
+      const adminContent = bankTransferAdminEmailContent({
+        orderId,
+        buyerEmail: email,
+        depositorName,
+        amount: plan.amount,
+        currency: plan.currency,
+        maxDevices: plan.maxDevices,
+        bank
+      });
+      const adminEmailResult = await sendResendEmail({
+        to: adminOrderEmail,
+        ...adminContent,
+        requestId: orderId,
+        type: "order_admin_notification"
+      });
+
+      adminOrderEmailDelivery = {
+        status: "sent",
+        to: adminOrderEmail,
+        ...adminEmailResult
+      };
+      await orderRef.set(
+        {
+          adminOrderEmailDeliveryStatus: "sent",
+          adminOrderEmailedAt: FieldValue.serverTimestamp(),
+          adminOrderMailLogId: adminEmailResult.mailLogId,
+          adminOrderEmailError: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not send admin order notification email.";
+      adminOrderEmailDelivery = {
+        status: "failed",
+        to: adminOrderEmail,
+        errorMessage: message
+      };
+      await orderRef.set(
+        {
+          adminOrderEmailDeliveryStatus: "failed",
+          adminOrderEmailError: message.slice(0, 500),
+          updatedAt: FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
+    }
+  }
+
+  const snap = await orderRef.get();
+
+  return {
+    ok: true,
+    order: publicOrder(orderId, snap.data() || {}),
+    orderEmailDelivery,
+    adminOrderEmailDelivery,
+    bank: bankTransferConfig(),
+    instructions: "Please transfer the payment to the bank account above. After confirmation, your Brainok Lifetime License will be issued automatically and sent to your email."
+  };
+});
+
+export const listOrders = onCall({ region }, async (request) => {
+  const uid = requireUid(request);
+  await requireSiteAdmin(uid);
+
+  const data = (request.data || {}) as Record<string, unknown>;
+  const status = oneOf<BrainokOrderStatus | "all">(
+    data.status,
+    ["all", "awaiting_payment", "paid", "completed", "cancelled", "failed"],
+    "all"
+  );
+  let ordersQuery: FirebaseFirestore.Query = db.collection("orders");
+  let snapshot: FirebaseFirestore.QuerySnapshot;
+  if (status !== "all") {
+    snapshot = await ordersQuery.where("status", "==", status).limit(100).get();
+  } else {
+    snapshot = await ordersQuery.orderBy("createdAt", "desc").limit(50).get();
+  }
+
+  const docs = snapshot.docs
+    .sort((left, right) => (timestampMillis(right.data().createdAt) || 0) - (timestampMillis(left.data().createdAt) || 0))
+    .slice(0, 50);
+
+  return {
+    orders: docs.map((orderDoc) => publicOrder(orderDoc.id, orderDoc.data() || {}))
+  };
+});
+
+export const approveBankTransferOrder = onCall(
+  { region, secrets: [resendApiKey] },
+  async (request) => {
+    const uid = requireUid(request);
+    await requireSiteAdmin(uid);
+
+    const data = (request.data || {}) as Record<string, unknown>;
+    const orderId = asString(data.orderId);
+    if (!orderId) {
+      throw new HttpsError("invalid-argument", "orderId is required.");
+    }
+
+    const orderSnap = await db.collection("orders").doc(orderId).get();
+    const order = orderSnap.data() || {};
+    const method = oneOf<BrainokPaymentMethod>(order.paymentMethod, ["bank_transfer", "paypal"], "bank_transfer");
+    const status = oneOf<BrainokOrderStatus>(
+      order.status,
+      ["awaiting_payment", "paid", "completed", "cancelled", "failed"],
+      "awaiting_payment"
+    );
+
+    if (method !== "bank_transfer") {
+      throw new HttpsError("failed-precondition", "Only bank transfer orders can be approved manually.");
+    }
+
+    if (status !== "awaiting_payment" && status !== "paid") {
+      throw new HttpsError("failed-precondition", "Only awaiting or paid orders can be approved.");
+    }
+
+    const result = await completePaidOrder({
+      orderId,
+      paidBy: uid,
+      paymentProvider: "bank_transfer"
+    });
+
+    return {
+      ok: true,
+      ...result
+    };
+  }
+);
+
+export const cancelOrder = onCall({ region }, async (request) => {
+  const uid = requireUid(request);
+  await requireSiteAdmin(uid);
+
+  const data = (request.data || {}) as Record<string, unknown>;
+  const orderId = asString(data.orderId);
+  if (!orderId) {
+    throw new HttpsError("invalid-argument", "orderId is required.");
+  }
+
+  const orderRef = db.collection("orders").doc(orderId);
+  const snap = await orderRef.get();
+  if (!snap.exists) {
+    throw new HttpsError("not-found", "Order does not exist.");
+  }
+
+  const status = oneOf<BrainokOrderStatus>(
+    snap.data()?.status,
+    ["awaiting_payment", "paid", "completed", "cancelled", "failed"],
+    "awaiting_payment"
+  );
+  if (status === "completed") {
+    throw new HttpsError("failed-precondition", "Completed orders cannot be cancelled.");
+  }
+
+  await orderRef.set(
+    {
+      status: "cancelled" satisfies BrainokOrderStatus,
+      cancelledAt: FieldValue.serverTimestamp(),
+      cancelledBy: uid,
+      updatedAt: FieldValue.serverTimestamp()
+    },
+    { merge: true }
+  );
+
+  return { ok: true, orderId, status: "cancelled" as const };
+});
+
+export const createPayPalOrder = onCall(
+  { region, secrets: [paypalClientId, paypalSecret] },
+  async (request) => {
+    const data = (request.data || {}) as Record<string, unknown>;
+    const email = validateBuyerEmail(data.email);
+    const plan = lifetimePlan(data.planId);
+    requireAgreement(data.agreementAccepted);
+    const orderAmount = plan.paypalAmount;
+    const orderCurrency = plan.paypalCurrency;
+
+    const config = paypalConfig();
+    if (!config.clientId) {
+      throw new HttpsError("failed-precondition", "PayPal Client ID is not configured.");
+    }
+
+    const orderId = generateOrderId();
+    const orderRef = db.collection("orders").doc(orderId);
+    await orderRef.create({
+      orderId,
+      email,
+      emailLower: emailLower(email),
+      amount: orderAmount,
+      currency: orderCurrency,
+      bankAmount: plan.amount,
+      bankCurrency: plan.currency,
+      status: "awaiting_payment" satisfies BrainokOrderStatus,
+      paymentMethod: "paypal" satisfies BrainokPaymentMethod,
+      licenseType: "lifetime" satisfies BrainokLicenseType,
+      planId: plan.id,
+      maxDevices: plan.maxDevices,
+      maxActivations: plan.maxDevices,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    });
+
+    const paypalOrder = await paypalJson<Record<string, unknown>>({
+      method: "POST",
+      path: "/v2/checkout/orders",
+      body: {
+        intent: "CAPTURE",
+        purchase_units: [
+          {
+            reference_id: orderId,
+            custom_id: orderId,
+            description: "Brainok Lifetime License",
+            amount: {
+              currency_code: orderCurrency,
+              value: paypalAmountValue(orderAmount, orderCurrency)
+            }
+          }
+        ],
+        payer: {
+          email_address: email
+        }
+      }
+    });
+    const paypalOrderId = asString(paypalOrder.id);
+    if (!paypalOrderId) {
+      await orderRef.set(
+        {
+          status: "failed" satisfies BrainokOrderStatus,
+          updatedAt: FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
+      throw new HttpsError("internal", "PayPal did not return an order ID.");
+    }
+
+    await orderRef.set(
+      {
+        paypalOrderId,
+        paypalStatus: asString(paypalOrder.status) || "CREATED",
+        updatedAt: FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    return {
+      ok: true,
+      orderId,
+      paypalOrderId
+    };
+  }
+);
+
+export const capturePayPalOrder = onCall(
+  { region, secrets: [paypalClientId, paypalSecret, resendApiKey] },
+  async (request) => {
+    const data = (request.data || {}) as Record<string, unknown>;
+    const orderId = asString(data.orderId);
+    const paypalOrderId = asString(data.paypalOrderId);
+
+    if (!orderId || !paypalOrderId) {
+      throw new HttpsError("invalid-argument", "orderId and paypalOrderId are required.");
+    }
+
+    const orderRef = db.collection("orders").doc(orderId);
+    const orderSnap = await orderRef.get();
+    if (!orderSnap.exists) {
+      throw new HttpsError("not-found", "Order does not exist.");
+    }
+
+    const order = orderSnap.data() || {};
+    if (asString(order.paypalOrderId) !== paypalOrderId) {
+      throw new HttpsError("failed-precondition", "PayPal order does not match this Brainok order.");
+    }
+
+    const captured = await paypalJson<Record<string, unknown>>({
+      method: "POST",
+      path: `/v2/checkout/orders/${encodeURIComponent(paypalOrderId)}/capture`
+    });
+    const status = asString(captured.status);
+    const purchaseUnits = Array.isArray(captured.purchase_units) ? captured.purchase_units : [];
+    const firstPurchaseUnit = purchaseUnits[0] as Record<string, unknown> | undefined;
+    const payments = firstPurchaseUnit?.payments as Record<string, unknown> | undefined;
+    const captures = Array.isArray(payments?.captures) ? payments.captures : [];
+    const firstCapture = captures[0] as Record<string, unknown> | undefined;
+    const capturedAmount = firstCapture?.amount as Record<string, unknown> | undefined;
+    const capturedValue = asNumber(capturedAmount?.value);
+    const capturedCurrency = normalizeCurrency(capturedAmount?.currency_code, asString(order.currency) || "USD");
+    const expectedAmount = Number(order.amount || 0);
+    const expectedCurrency = asString(order.currency) || "USD";
+
+    if (status !== "COMPLETED" || asString(firstCapture?.status) !== "COMPLETED") {
+      await orderRef.set(
+        {
+          paypalStatus: status || "UNKNOWN",
+          updatedAt: FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
+      throw new HttpsError("failed-precondition", "PayPal payment was not completed.");
+    }
+
+    if (capturedCurrency !== expectedCurrency || Math.abs((capturedValue || 0) - expectedAmount) > 0.01) {
+      await orderRef.set(
+        {
+          status: "failed" satisfies BrainokOrderStatus,
+          paypalStatus: status,
+          paypalVerificationError: "Captured amount or currency did not match the order.",
+          updatedAt: FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
+      throw new HttpsError("failed-precondition", "PayPal payment verification failed.");
+    }
+
+    await orderRef.set(
+      {
+        paypalStatus: status,
+        paypalCaptureId: asString(firstCapture?.id) || null,
+        updatedAt: FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    const result = await completePaidOrder({
+      orderId,
+      paidBy: null,
+      paymentProvider: "paypal",
+      providerPaymentId: asString(firstCapture?.id) || paypalOrderId,
+      rawPayload: captured
+    });
+
+    return {
+      ok: true,
+      ...result
+    };
+  }
+);
 
 export const tossPaymentsWebhook = onRequest(
   { region, cors: false },
@@ -1182,7 +2114,7 @@ function defaultDeviceLimit(plan: BrainokLicensePlan): number {
     return 50;
   }
 
-  return 3;
+  return 2;
 }
 
 function licenseDeviceLimit(plan: BrainokLicensePlan, value: unknown): number {
@@ -1192,25 +2124,26 @@ function licenseDeviceLimit(plan: BrainokLicensePlan, value: unknown): number {
   return Math.min(maximum, Math.max(1, limit));
 }
 
-async function issueBrainokLicense({
+async function issueBrainokLifetimeLicense({
   email,
   buyerName,
-  plan,
   licenseCode: requestedLicenseCode,
   maxDevices: requestedMaxDevices,
   source,
-  createdByUid,
-  paymentId
+  issuedBy,
+  paymentId,
+  orderId
 }: {
   email?: string | null;
   buyerName?: string | null;
-  plan: BrainokLicensePlan;
   licenseCode?: string;
   maxDevices?: number;
-  source: PaymentProviderId;
-  createdByUid?: string | null;
+  source: PaymentProviderId | BrainokPaymentMethod;
+  issuedBy?: string | null;
   paymentId?: string | null;
+  orderId?: string | null;
 }) {
+  const plan: BrainokLicensePlan = "personal";
   const licenseCode = normalizeLicenseCode(requestedLicenseCode) || generateLicenseCode(plan);
   const licenseId = licenseIdForCode(licenseCode);
   const normalizedEmail = asString(email) || null;
@@ -1230,28 +2163,101 @@ async function issueBrainokLicense({
     emailLower: emailLower(normalizedEmail),
     buyerName: normalizedBuyerName,
     plan,
+    licenseType: "lifetime" satisfies BrainokLicenseType,
     status: "active" satisfies BrainokLicenseStatus,
     maxDevices,
+    maxActivations: maxDevices,
     activationCount: 0,
     allowedApps: ["*"],
     source,
     paymentId: paymentId || undefined,
+    orderId: orderId || undefined,
     emailDeliveryStatus: normalizedEmail ? "pending" : "skipped",
-    createdByUid: createdByUid || undefined,
+    issuedBy: issuedBy || undefined,
+    createdByUid: issuedBy || undefined,
+    expiresAt: null,
     issuedAt: FieldValue.serverTimestamp(),
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp()
   }));
 
-  return {
+  const result = {
     licenseId,
     licenseCode,
     email: normalizedEmail,
     buyerName: normalizedBuyerName,
+    licenseType: "lifetime" as const,
     plan,
     status: "active" as const,
     maxDevices
   };
+
+  if (!normalizedEmail) {
+    return {
+      ...result,
+      emailDelivery: {
+        status: "skipped" as const,
+        to: null
+      }
+    };
+  }
+
+  try {
+    const content = licenseEmailContent({
+      licenseCode,
+      maxDevices,
+      recipientName: normalizedBuyerName
+    });
+    const emailResult = await sendResendEmail({
+      to: normalizedEmail,
+      ...content,
+      licenseCode,
+      licenseId,
+      type: "license_delivery",
+      requestedByUid: issuedBy || null
+    });
+
+    await licenseRef.set(
+      {
+        emailDeliveryStatus: "sent",
+        lastEmailedAt: FieldValue.serverTimestamp(),
+        lastEmailTo: normalizedEmail,
+        lastMailLogId: emailResult.mailLogId,
+        lastEmailError: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    return {
+      ...result,
+      emailDelivery: {
+        status: "sent" as const,
+        to: normalizedEmail,
+        ...emailResult
+      }
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not send license email.";
+    await licenseRef.set(
+      {
+        emailDeliveryStatus: "failed",
+        lastEmailTo: normalizedEmail,
+        lastEmailError: message.slice(0, 500),
+        updatedAt: FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    return {
+      ...result,
+      emailDelivery: {
+        status: "failed" as const,
+        to: normalizedEmail,
+        errorMessage: message
+      }
+    };
+  }
 }
 
 function normalizeActivationCode(value: unknown): string | undefined {
@@ -2022,87 +3028,16 @@ export const createLicense = onCall(
     await requireSiteAdmin(uid);
 
     const data = (request.data || {}) as Record<string, unknown>;
-    const plan = normalizePlan(data.plan);
     const email = asString(data.email) || null;
     const buyerName = asString(data.buyerName) || null;
-    const result = await issueBrainokLicense({
+    return issueBrainokLifetimeLicense({
       email,
       buyerName,
-      plan,
       licenseCode: asString(data.licenseCode),
       maxDevices: asNumber(data.maxDevices),
       source: "manual",
-      createdByUid: uid
+      issuedBy: uid
     });
-
-    if (!email) {
-      return {
-        ...result,
-        emailDelivery: {
-          status: "skipped" as const,
-          to: null
-        }
-      };
-    }
-
-    const licenseRef = db.collection("licenses").doc(result.licenseCode);
-    try {
-      const content = licenseEmailContent({
-        licenseCode: result.licenseCode,
-        plan: result.plan,
-        maxDevices: result.maxDevices,
-        recipientName: buyerName
-      });
-      const emailResult = await sendResendEmail({
-        to: email,
-        ...content,
-        licenseCode: result.licenseCode,
-        licenseId: result.licenseId,
-        type: "license_delivery",
-        requestedByUid: uid
-      });
-
-      await licenseRef.set(
-        {
-          emailDeliveryStatus: "sent",
-          lastEmailedAt: FieldValue.serverTimestamp(),
-          lastEmailTo: email,
-          lastMailLogId: emailResult.mailLogId,
-          lastEmailError: FieldValue.delete(),
-          updatedAt: FieldValue.serverTimestamp()
-        },
-        { merge: true }
-      );
-
-      return {
-        ...result,
-        emailDelivery: {
-          status: "sent" as const,
-          to: email,
-          ...emailResult
-        }
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not send license email.";
-      await licenseRef.set(
-        {
-          emailDeliveryStatus: "failed",
-          lastEmailTo: email,
-          lastEmailError: message.slice(0, 500),
-          updatedAt: FieldValue.serverTimestamp()
-        },
-        { merge: true }
-      );
-
-      return {
-        ...result,
-        emailDelivery: {
-          status: "failed" as const,
-          to: email,
-          errorMessage: message
-        }
-      };
-    }
   }
 );
 
@@ -2175,7 +3110,6 @@ async function sendStoredLicenseEmail({
   const licenseId = asString(license.licenseId) || licenseIdForCode(licenseCode);
   const content = licenseEmailContent({
     licenseCode,
-    plan,
     maxDevices,
     recipientName: asString(license.buyerName) || null
   });

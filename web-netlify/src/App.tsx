@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ClipboardEvent, ReactNode } from "react";
 import {
   GoogleAuthProvider,
@@ -13,7 +13,9 @@ import {
   ArrowDown,
   ArrowUp,
   BookOpen,
+  CheckCircle2,
   ChevronDown,
+  CreditCard,
   Download,
   Eye,
   EyeOff,
@@ -21,6 +23,7 @@ import {
   Globe2,
   Image as ImageIcon,
   KeyRound,
+  Landmark,
   LogOut,
   Mail,
   Maximize2,
@@ -44,19 +47,28 @@ import {
   AppType,
   BrainokLicensePlan,
   AppQuestion,
+  BrainokOrderSummary,
+  BrainokStoreConfig,
   DEFAULT_SITE_SETTINGS,
   LicenseSummary,
   SiteSettings,
   SupportResource,
   UserProfile,
+  approveBankTransferOrder,
   answerAppQuestion,
   askAppQuestion,
+  cancelOrder,
+  capturePayPalOrder,
   createApp,
+  createBankTransferOrder,
   createLicense,
+  createPayPalOrder,
   disableLicense,
   ensureUserProfile,
   getAppFromServer,
+  getBrainokStoreConfig,
   listLicenses,
+  listOrders,
   requestBrainokLicense,
   resendLicenseEmail,
   resetLicenseDevice,
@@ -79,9 +91,66 @@ type SupportOpenRequest = { appId: string; key: number } | null;
 type Language = "ko" | "en";
 type ReadmeLanguage = "en" | "ko";
 type MarkdownDraftField = "description" | "descriptionKo";
+type StoreRegion = "korea" | "international";
+type LifetimePlanId = "lifetime_2" | "lifetime_5";
+
+type PayPalButtonsInstance = {
+  render: (container: HTMLElement) => Promise<void>;
+  close?: () => void;
+};
+
+declare global {
+  interface Window {
+    paypal?: {
+      Buttons: (options: {
+        style?: Record<string, unknown>;
+        createOrder: () => Promise<string>;
+        onApprove: (data: { orderID?: string }) => Promise<void>;
+        onError?: (error: unknown) => void;
+      }) => PayPalButtonsInstance;
+    };
+  }
+}
 
 const BRAND_LOGO_SRC = "/brainok-store-logo.png?v=2";
 const SUBSCRIPTION_REQUEST_EMAIL = "brainok777@gmail.com";
+const DEFAULT_STORE_CONFIG: BrainokStoreConfig = {
+  plans: [
+    {
+      id: "lifetime_2",
+      name: "Brainok Lifetime License - 2 devices",
+      maxDevices: 2,
+      amount: 20000,
+      currency: "KRW",
+      label: "₩20,000",
+      paypalAmount: 15,
+      paypalCurrency: "USD",
+      paypalLabel: "$15.00"
+    },
+    {
+      id: "lifetime_5",
+      name: "Brainok Lifetime License - 5 devices",
+      maxDevices: 5,
+      amount: 40000,
+      currency: "KRW",
+      label: "₩40,000",
+      paypalAmount: 30,
+      paypalCurrency: "USD",
+      paypalLabel: "$30.00"
+    }
+  ],
+  bank: {
+    bankName: "우리은행",
+    accountNumber: "126-296921-12-001",
+    accountHolder: "남효석"
+  },
+  paypal: {
+    clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID || null,
+    currency: "USD",
+    environment: "sandbox"
+  },
+  supportEmail: "brainok777@gmail.com"
+};
 const LOCAL_APP_MEDIA: Record<string, string> = {
   "brainok-pagewheel": "/app-media/brainok-pagewheel.jpg",
   "brainok-pagewheel-afcc05": "/app-media/brainok-pagewheel.jpg",
@@ -99,7 +168,7 @@ const UI_TEXT = {
     applications: "응용 프로그램",
     application: "응용 프로그램",
     webApp: "웹 앱",
-    subscription: "라이선스",
+    subscription: "구매 / 라이선스",
     support: "지원",
     account: "계정",
     signOut: "로그아웃",
@@ -134,6 +203,7 @@ const UI_TEXT = {
       noBuildYet: "빌드 없음",
       activated: "활성화됨",
       supportRequest: "지원 요청",
+      buyLifetime: "라이선스 구매",
       buyAccess: "구매",
       checkoutMissing: "결제 링크 없음",
       activateInApp: "앱에서 활성화",
@@ -278,7 +348,7 @@ const UI_TEXT = {
     applications: "Applications",
     application: "Application",
     webApp: "Web App",
-    subscription: "License",
+    subscription: "Buy / License",
     support: "Support",
     account: "Account",
     signOut: "Sign out",
@@ -313,6 +383,7 @@ const UI_TEXT = {
       noBuildYet: "No build yet",
       activated: "Activated",
       supportRequest: "Support request",
+      buyLifetime: "Buy license",
       buyAccess: "Buy access",
       checkoutMissing: "Checkout link not set",
       activateInApp: "Activate in app",
@@ -465,11 +536,12 @@ export function App() {
   const [siteSettings, setSiteSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS);
   const [ready, setReady] = useState(false);
   const [navApps, setNavApps] = useState<BrainokApp[]>([]);
-  const [tab, setTab] = useState<Tab>("apps");
+  const [tab, setTab] = useState<Tab>(() => window.location.pathname === "/admin/orders" ? "account" : "apps");
   const [error, setError] = useState<string | null>(null);
   const [homeResetKey, setHomeResetKey] = useState(0);
   const [appOpenRequest, setAppOpenRequest] = useState<AppOpenRequest>(null);
   const [supportOpenRequest, setSupportOpenRequest] = useState<SupportOpenRequest>(null);
+  const [paymentOpenRequestKey, setPaymentOpenRequestKey] = useState(0);
   const [preferredLoginMode, setPreferredLoginMode] = useState<"user" | "admin">("admin");
   const [language, setLanguage] = useState<Language>(readPreferredLanguage);
   const text = UI_TEXT[language];
@@ -501,6 +573,11 @@ export function App() {
   function openSupportRequest(appId: string) {
     setTab("subscription");
     setSupportOpenRequest({ appId, key: Date.now() });
+  }
+
+  function openLicensePurchase() {
+    setTab("subscription");
+    setPaymentOpenRequestKey(Date.now());
   }
 
   function toggleLanguage() {
@@ -579,6 +656,7 @@ export function App() {
           openAppRequest={appOpenRequest}
           onError={setError}
           onOpenSupportRequest={openSupportRequest}
+          onOpenLicensePurchase={openLicensePurchase}
           appType="application"
           emptyTitle={text.apps.applicationsEmptyTitle}
           emptyAdminCopy={text.apps.applicationsEmptyAdminCopy}
@@ -599,6 +677,7 @@ export function App() {
           openAppRequest={appOpenRequest}
           onError={setError}
           onOpenSupportRequest={openSupportRequest}
+          onOpenLicensePurchase={openLicensePurchase}
           appType="web_app"
           emptyTitle={text.apps.webEmptyTitle}
           emptyAdminCopy={text.apps.webEmptyAdminCopy}
@@ -618,8 +697,8 @@ export function App() {
       return <AccountView user={user} profile={profile} siteSettings={localizedSiteSettings} onError={setError} preferredLoginMode={preferredLoginMode} language={language} text={text} />;
     }
 
-    return <SubscriptionView apps={[...sortedNavApps, ...sortedWebApps]} user={user} profile={profile} onError={setError} onOpenAccount={openUserSignIn} openSupportRequest={supportOpenRequest} language={language} text={text} />;
-  }, [appOpenRequest, homeResetKey, language, localizedSiteSettings, preferredLoginMode, profile, sortedNavApps, sortedWebApps, supportOpenRequest, tab, text, user]);
+    return <SubscriptionView apps={[...sortedNavApps, ...sortedWebApps]} user={user} profile={profile} onError={setError} onOpenAccount={openUserSignIn} openSupportRequest={supportOpenRequest} paymentOpenRequestKey={paymentOpenRequestKey} language={language} text={text} />;
+  }, [appOpenRequest, homeResetKey, language, localizedSiteSettings, paymentOpenRequestKey, preferredLoginMode, profile, sortedNavApps, sortedWebApps, supportOpenRequest, tab, text, user]);
 
   if (!ready) {
     return <main className="page-shell">{text.loading}</main>;
@@ -728,6 +807,7 @@ function SubscriptionView({
   onError,
   onOpenAccount,
   openSupportRequest,
+  paymentOpenRequestKey,
   language,
   text
 }: {
@@ -737,11 +817,11 @@ function SubscriptionView({
   onError: (message: string | null) => void;
   onOpenAccount: () => void;
   openSupportRequest: SupportOpenRequest;
+  paymentOpenRequestKey: number;
   language: Language;
   text: UiText;
 }) {
   const [selectedSupportAppId, setSelectedSupportAppId] = useState<string | null>(null);
-  const [licenseRequestPlan, setLicenseRequestPlan] = useState<string | null>(null);
   const supportApps = useMemo(
     () => sortAppsForDisplay(apps.filter((app) => app.status === "active")),
     [apps]
@@ -762,6 +842,17 @@ function SubscriptionView({
     }
   }, [openSupportRequest?.key]);
 
+  useEffect(() => {
+    if (!paymentOpenRequestKey) {
+      return;
+    }
+
+    setSelectedSupportAppId(null);
+    window.setTimeout(() => {
+      document.getElementById("brainok-payment-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  }, [paymentOpenRequestKey]);
+
   if (selectedSupportApp) {
     return (
       <SupportAppDetail
@@ -780,65 +871,26 @@ function SubscriptionView({
   return (
     <section className="subscription-page">
       <div className="section-heading">
-        <span className="mini-label">{text.subscriptionPage.eyebrow}</span>
-        <h2>{text.subscriptionPage.title}</h2>
-        <p>{text.subscriptionPage.intro}</p>
-        <button className="button primary large" type="button" onClick={() => setLicenseRequestPlan(text.subscriptionPage.personalTitle)}>
+        <span className="mini-label">Brainok Lifetime License</span>
+        <h2>{language === "ko" ? "한 번 구매하면 Brainok 앱과 웹앱을 함께 사용합니다." : "One purchase unlocks Brainok apps and web apps."}</h2>
+        <p>
+          {language === "ko"
+            ? "Brainok Lifetime License는 구독이 아닌 1회 구매 라이선스입니다. Brainok에서 제공하는 여러 데스크톱 앱과 웹앱 사용 권한을 하나의 라이선스로 관리합니다."
+            : "The Brainok Lifetime License is a one-time purchase, not a subscription. It manages access to Brainok desktop apps and web apps with one license."}
+        </p>
+        <button className="button primary large" type="button" onClick={() => document.getElementById("brainok-payment-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
           <KeyRound size={18} />
-          {text.subscriptionPage.primaryCta}
+          {language === "ko" ? "Brainok Lifetime License 구매" : "Buy Brainok Lifetime License"}
         </button>
       </div>
 
       <div className="subscription-flow">
-        <LicenseFeatureCard icon={<Download size={22} />} title={text.subscriptionPage.freeTitle} bullets={text.subscriptionPage.freeBullets} />
-        <LicenseFeatureCard icon={<KeyRound size={22} />} title={text.subscriptionPage.oneTitle} bullets={text.subscriptionPage.oneBullets} />
-        <LicenseFeatureCard icon={<ShieldCheck size={22} />} title={text.subscriptionPage.anywhereTitle} bullets={text.subscriptionPage.anywhereBullets} />
+        <LicenseFeatureCard icon={<KeyRound size={22} />} title="Brainok Lifetime License" bullets={language === "ko" ? ["1회 구매", "만료 없음", "월 결제 없음"] : ["One-time purchase", "No expiration date", "No monthly billing"]} />
+        <LicenseFeatureCard icon={<Package size={22} />} title={language === "ko" ? "Brainok 앱과 웹앱 포함" : "Brainok Apps and Web Apps"} bullets={language === "ko" ? ["여러 데스크톱 앱", "웹앱 접근 권한", "하나의 라이선스로 관리"] : ["Multiple desktop apps", "Web app access", "Managed by one license"]} />
+        <LicenseFeatureCard icon={<ShieldCheck size={22} />} title={language === "ko" ? "2대 또는 5대 기기" : "2 or 5 Devices"} bullets={language === "ko" ? ["2대: 20,000원", "5대: 40,000원", "발급 코드는 이메일로 전송"] : ["2 devices: KRW 20,000", "5 devices: KRW 40,000", "Activation code sent by email"]} />
       </div>
 
-      <section className="subscription-plans" aria-labelledby="subscription-plans-title">
-        <h3 id="subscription-plans-title">{text.subscriptionPage.plansTitle}</h3>
-        <div className="subscription-plan-grid">
-          <PlanCard
-            title={text.subscriptionPage.personalTitle}
-            price={text.subscriptionPage.personalPrice}
-            features={[text.subscriptionPage.personalCopy]}
-            action={(
-              <button className="button primary full" type="button" onClick={() => setLicenseRequestPlan(text.subscriptionPage.personalTitle)}>
-                {text.subscriptionPage.personalCta}
-              </button>
-            )}
-          />
-          <PlanCard
-            title={text.subscriptionPage.proTitle}
-            price={text.subscriptionPage.proPrice}
-            features={[text.subscriptionPage.proCopy]}
-            action={(
-              <button className="button primary full" type="button" onClick={() => setLicenseRequestPlan(text.subscriptionPage.proTitle)}>
-                {text.subscriptionPage.proCta}
-              </button>
-            )}
-          />
-          <PlanCard
-            title={text.subscriptionPage.labTitle}
-            price={text.subscriptionPage.labPrice}
-            features={[text.subscriptionPage.labCopy]}
-            action={(
-              <button className="button primary full" type="button" onClick={() => setLicenseRequestPlan(text.subscriptionPage.labTitle)}>
-                {text.subscriptionPage.labCta}
-              </button>
-            )}
-          />
-        </div>
-      </section>
-
-      {licenseRequestPlan ? (
-        <LicenseRequestDialog
-          defaultPlan={licenseRequestPlan}
-          language={language}
-          text={text}
-          onClose={() => setLicenseRequestPlan(null)}
-        />
-      ) : null}
+      <BrainokPaymentPanel language={language} onError={onError} />
     </section>
   );
 }
@@ -861,6 +913,475 @@ function LicenseFeatureCard({
       </ul>
     </article>
   );
+}
+
+function BrainokPaymentPanel({
+  language,
+  onError
+}: {
+  language: Language;
+  onError: (message: string | null) => void;
+}) {
+  const [config, setConfig] = useState<BrainokStoreConfig>(DEFAULT_STORE_CONFIG);
+  const [region, setRegion] = useState<StoreRegion>("korea");
+  const [selectedPlanId, setSelectedPlanId] = useState<LifetimePlanId>("lifetime_2");
+  const [email, setEmail] = useState("");
+  const [depositorName, setDepositorName] = useState("");
+  const [agreementAccepted, setAgreementAccepted] = useState(false);
+  const [bankOrder, setBankOrder] = useState<BrainokOrderSummary | null>(null);
+  const [paypalOrder, setPaypalOrder] = useState<BrainokOrderSummary | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [panelError, setPanelError] = useState<string | null>(null);
+  const isKorean = language === "ko";
+
+  useEffect(() => {
+    let cancelled = false;
+    getBrainokStoreConfig()
+      .then((nextConfig) => {
+        if (!cancelled) {
+          setConfig(normalizeStoreConfig(nextConfig));
+        }
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : "Payment settings could not load.";
+        if (!cancelled) {
+          setStatus(isKorean ? "서버 설정을 불러오지 못해 기본 가격과 계좌 정보를 표시합니다." : "Using local payment settings because server settings could not load.");
+          console.warn(message);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isKorean]);
+
+  const selectedPlan = config.plans.find((plan) => plan.id === selectedPlanId) || config.plans[0];
+  const bank = config.bank;
+  const selectedPlanLabel = planPriceLabel(selectedPlan, region);
+  const selectedPayPalAmount = selectedPlan.paypalAmount ?? selectedPlan.amount;
+
+  async function submitBankOrder() {
+    try {
+      setBusy(true);
+      setPanelError(null);
+      setStatus(null);
+      onError(null);
+      const result = await createBankTransferOrder({
+        email: email.trim(),
+        depositorName: depositorName.trim(),
+        planId: selectedPlan.id,
+        agreementAccepted
+      });
+      setBankOrder(result.order);
+      const emailSent = result.orderEmailDelivery?.status === "sent";
+      const emailFailed = result.orderEmailDelivery?.status === "failed";
+      setStatus(isKorean
+        ? emailSent
+          ? "주문이 생성되었고 안내 이메일을 보냈습니다. 아래 주문번호와 금액으로 입금해 주세요."
+          : emailFailed
+            ? "주문은 생성되었지만 안내 이메일 발송에 실패했습니다. 아래 주문번호와 금액을 확인해 주세요."
+            : "주문이 생성되었습니다. 아래 주문번호와 금액으로 입금해 주세요."
+        : emailSent
+          ? "Order created and confirmation email sent. Please transfer the amount below with this order number."
+          : emailFailed
+            ? "Order created, but the confirmation email could not be sent. Please use the order number below."
+            : "Order created. Please transfer the amount below with this order number.");
+    } catch (error) {
+      const message = paymentErrorMessage(error, isKorean ? "주문을 만들 수 없습니다." : "Could not create this order.");
+      setPanelError(message);
+      onError(message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const canSubmitBank = email.trim().includes("@") && depositorName.trim().length > 0 && agreementAccepted;
+  const paypalReady = Boolean(config.paypal.clientId && selectedPayPalAmount > 0);
+
+  return (
+    <section className="payment-panel" id="brainok-payment-panel" aria-labelledby="brainok-payment-title">
+      <div className="payment-header">
+        <div>
+          <span className="mini-label">{isKorean ? "결제" : "Payment"}</span>
+          <h3 id="brainok-payment-title">Brainok Lifetime License</h3>
+          <p>{isKorean ? "1회 구매 · Brainok 앱과 웹앱 포함 · 2대 또는 5대 기기" : "One-time purchase · Includes Brainok apps and web apps · 2 or 5 devices"}</p>
+        </div>
+        <strong>{selectedPlanLabel}</strong>
+      </div>
+
+      <div className="license-option-grid" role="radiogroup" aria-label={isKorean ? "라이선스 옵션" : "License option"}>
+        {config.plans.map((plan) => (
+          <label className={selectedPlan.id === plan.id ? "active" : ""} key={plan.id}>
+            <input
+              type="radio"
+              name="brainok-license-plan"
+              checked={selectedPlan.id === plan.id}
+              onChange={() => setSelectedPlanId(plan.id)}
+            />
+            <span>
+              <strong>{isKorean ? `${plan.maxDevices}대 기기` : `${plan.maxDevices} devices`}</strong>
+              <small>{planPriceLabel(plan, region)}</small>
+            </span>
+          </label>
+        ))}
+      </div>
+
+      <div className="region-selector" role="radiogroup" aria-label={isKorean ? "지역 선택" : "Region selection"}>
+        <label className={region === "korea" ? "active" : ""}>
+          <input type="radio" name="brainok-region" checked={region === "korea"} onChange={() => setRegion("korea")} />
+          <Landmark size={18} />
+          Korea
+        </label>
+        <label className={region === "international" ? "active" : ""}>
+          <input type="radio" name="brainok-region" checked={region === "international"} onChange={() => setRegion("international")} />
+          <CreditCard size={18} />
+          International
+        </label>
+      </div>
+
+      {region === "korea" ? (
+        <div className="payment-method-grid">
+          <article className="bank-account-box">
+            <span className="mini-label">Bank Transfer</span>
+            <dl>
+              <div>
+                <dt>Bank</dt>
+                <dd>{bank.bankName}</dd>
+              </div>
+              <div>
+                <dt>Account</dt>
+                <dd>{bank.accountNumber}</dd>
+              </div>
+              <div>
+                <dt>Account Holder</dt>
+                <dd>{bank.accountHolder}</dd>
+              </div>
+              <div>
+                <dt>Amount</dt>
+                <dd>{selectedPlan.label}</dd>
+              </div>
+            </dl>
+            <p>{isKorean ? "위 계좌로 입금해 주세요. 입금 확인 후 Brainok Lifetime License가 자동 발급되고 이메일로 전송됩니다." : "Please transfer the payment to the bank account above. After confirmation, your Brainok Lifetime License will be issued automatically and sent to your email."}</p>
+          </article>
+
+          <article className="payment-form-box">
+            <span className="mini-label">{isKorean ? "주문 생성" : "Create Order"}</span>
+            <div className="form-grid compact-editor-grid">
+              <label>
+                Email
+                <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="buyer@example.com" />
+              </label>
+              <label>
+                {isKorean ? "입금자명" : "Depositor Name"}
+                <input value={depositorName} onChange={(event) => setDepositorName(event.target.value)} />
+              </label>
+            </div>
+            <label className="agreement-row">
+              <input type="checkbox" checked={agreementAccepted} onChange={(event) => setAgreementAccepted(event.target.checked)} />
+              <span>{isKorean ? "결제 확인 후 라이선스가 이메일로 발급되는 것에 동의합니다." : "I agree that the license will be issued by email after payment confirmation."}</span>
+            </label>
+            <button className="button primary" type="button" disabled={busy || !canSubmitBank} onClick={() => void submitBankOrder()}>
+              <ReceiptText size={18} />
+              {busy ? (isKorean ? "생성 중..." : "Creating...") : (isKorean ? "주문 생성" : "Create Order")}
+            </button>
+          </article>
+        </div>
+      ) : (
+        <div className="paypal-checkout-box">
+          <div>
+            <span className="mini-label">PayPal Checkout</span>
+            <h4>{isKorean ? "해외 결제" : "International Payment"}</h4>
+            <p>{isKorean ? "PayPal이 지원하는 경우 PayPal 계정 없이 카드 결제도 표시될 수 있습니다. 카드 정보는 Brainok Store가 직접 처리하지 않습니다." : "When PayPal supports it, eligible customers can pay by card without a PayPal account. Brainok Store never processes card details directly."}</p>
+          </div>
+          <label>
+            Email
+            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="buyer@example.com" />
+          </label>
+          <label className="agreement-row">
+            <input type="checkbox" checked={agreementAccepted} onChange={(event) => setAgreementAccepted(event.target.checked)} />
+            <span>{isKorean ? "결제 완료 후 Brainok Lifetime License가 이메일로 발급되는 것에 동의합니다." : "I agree that my Brainok Lifetime License will be issued by email after payment succeeds."}</span>
+          </label>
+          {paypalReady ? (
+            <PayPalCheckoutButton
+              config={config}
+              planId={selectedPlan.id}
+              email={email.trim()}
+              agreementAccepted={agreementAccepted}
+              language={language}
+              onStart={() => {
+                setPanelError(null);
+                setStatus(null);
+                onError(null);
+              }}
+              onComplete={(order) => {
+                setPaypalOrder(order);
+                setStatus(isKorean ? "결제가 확인되었고 라이선스가 이메일로 전송됩니다." : "Payment verified. Your license will be sent by email.");
+              }}
+              onError={(message) => {
+                setPanelError(message);
+                onError(message);
+              }}
+            />
+          ) : (
+            <p className="warning-text">{isKorean ? "PayPal 카드 결제를 사용하려면 PayPal Client ID를 환경변수에 설정해야 합니다." : "Set the PayPal Client ID in environment variables to enable PayPal card checkout."}</p>
+          )}
+        </div>
+      )}
+
+      {bankOrder ? <OrderResultCard order={bankOrder} config={config} language={language} /> : null}
+      {paypalOrder ? <OrderResultCard order={paypalOrder} config={config} language={language} /> : null}
+      {status ? <p className="success-text">{status}</p> : null}
+      {panelError ? <p className="error-text inline-error">{panelError}</p> : null}
+    </section>
+  );
+}
+
+function PayPalCheckoutButton({
+  config,
+  planId,
+  email,
+  agreementAccepted,
+  language,
+  onStart,
+  onComplete,
+  onError
+}: {
+  config: BrainokStoreConfig;
+  planId: LifetimePlanId;
+  email: string;
+  agreementAccepted: boolean;
+  language: Language;
+  onStart: () => void;
+  onComplete: (order: BrainokOrderSummary) => void;
+  onError: (message: string) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const localOrderIdRef = useRef<string | null>(null);
+  const isKorean = language === "ko";
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !config.paypal.clientId) {
+      return undefined;
+    }
+
+    let buttons: PayPalButtonsInstance | null = null;
+    let cancelled = false;
+    container.innerHTML = "";
+
+    loadPayPalSdk(config.paypal.clientId, config.paypal.currency)
+      .then(() => {
+        if (cancelled || !container || !window.paypal) {
+          return;
+        }
+
+        buttons = window.paypal.Buttons({
+          style: {
+            layout: "vertical",
+            shape: "rect",
+            label: "paypal"
+          },
+          createOrder: async () => {
+            onStart();
+            if (!email.includes("@")) {
+              throw new Error(isKorean ? "이메일을 입력해 주세요." : "Enter your email first.");
+            }
+            if (!agreementAccepted) {
+              throw new Error(isKorean ? "동의 체크박스를 선택해 주세요." : "Accept the agreement first.");
+            }
+
+            const result = await createPayPalOrder({
+              email,
+              planId,
+              agreementAccepted
+            });
+            localOrderIdRef.current = result.orderId;
+            return result.paypalOrderId;
+          },
+          onApprove: async (data) => {
+            const orderId = localOrderIdRef.current;
+            const paypalOrderId = data.orderID;
+            if (!orderId || !paypalOrderId) {
+              throw new Error("Missing PayPal order information.");
+            }
+
+            const result = await capturePayPalOrder({
+              orderId,
+              paypalOrderId
+            });
+            onComplete(result.order);
+          },
+          onError: (error) => {
+            const message = paymentErrorMessage(error, isKorean ? "PayPal 결제를 처리할 수 없습니다." : "Could not process PayPal payment.");
+            onError(message);
+          }
+        });
+
+        void buttons.render(container);
+      })
+      .catch((error) => {
+        const message = paymentErrorMessage(error, isKorean ? "PayPal SDK를 불러올 수 없습니다." : "Could not load PayPal Checkout.");
+        onError(message);
+      });
+
+    return () => {
+      cancelled = true;
+      try {
+        buttons?.close?.();
+      } catch {
+        // PayPal cleanup is best-effort.
+      }
+      if (container) {
+        container.innerHTML = "";
+      }
+    };
+  }, [agreementAccepted, config.paypal.clientId, config.paypal.currency, email, isKorean, onComplete, onError, onStart, planId]);
+
+  return <div className="paypal-buttons" ref={containerRef} />;
+}
+
+function OrderResultCard({
+  order,
+  config,
+  language
+}: {
+  order: BrainokOrderSummary;
+  config: BrainokStoreConfig;
+  language: Language;
+}) {
+  const bank = config?.bank;
+  const isBankOrder = order.paymentMethod === "bank_transfer";
+  const isKorean = language === "ko";
+
+  return (
+    <article className="order-result-card">
+      <div className="order-result-heading">
+        <CheckCircle2 size={20} />
+        <strong>{isKorean ? "주문 정보" : "Order Details"}</strong>
+      </div>
+      <dl>
+        <div>
+          <dt>{isKorean ? "주문번호" : "Order Number"}</dt>
+          <dd>{order.orderId}</dd>
+        </div>
+        <div>
+          <dt>Email</dt>
+          <dd>{order.email}</dd>
+        </div>
+        <div>
+          <dt>{isKorean ? "금액" : "Amount"}</dt>
+          <dd>{formatStorePrice(order.amount, order.currency)}</dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd>{order.status}</dd>
+        </div>
+        {isBankOrder ? (
+          <>
+            <div>
+              <dt>Bank</dt>
+              <dd>{bank?.bankName || "-"}</dd>
+            </div>
+            <div>
+              <dt>Account</dt>
+              <dd>{bank?.accountNumber || "-"}</dd>
+            </div>
+          </>
+        ) : null}
+      </dl>
+      <p>{isBankOrder
+        ? (isKorean ? "입금자명과 주문번호를 함께 확인할 수 있게 입금해 주세요. 확인 후 라이선스가 자동 발급됩니다." : "Please transfer with a matching depositor name and order number. The license is issued after confirmation.")
+        : (isKorean ? "PayPal 결제 검증이 완료되면 라이선스 코드가 이메일로 전송됩니다." : "After PayPal verification, your license code is sent by email.")}</p>
+    </article>
+  );
+}
+
+function loadPayPalSdk(clientId: string, currency: string): Promise<void> {
+  const scriptId = "paypal-js-sdk";
+  const src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId)}&currency=${encodeURIComponent(currency)}&intent=capture&components=buttons&enable-funding=card`;
+  const existing = document.getElementById(scriptId) as HTMLScriptElement | null;
+
+  if (window.paypal && existing?.src === src) {
+    return Promise.resolve();
+  }
+
+  if (existing && existing.src !== src) {
+    existing.remove();
+    window.paypal = undefined;
+  }
+
+  return new Promise((resolve, reject) => {
+    const current = document.getElementById(scriptId) as HTMLScriptElement | null;
+    if (current) {
+      current.addEventListener("load", () => resolve(), { once: true });
+      current.addEventListener("error", () => reject(new Error("PayPal SDK failed to load.")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = scriptId;
+    script.src = src;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("PayPal SDK failed to load."));
+    document.head.appendChild(script);
+  });
+}
+
+function formatStorePrice(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat("en", {
+      style: "currency",
+      currency,
+      currencyDisplay: "narrowSymbol",
+      maximumFractionDigits: currency === "KRW" ? 0 : 2
+    }).format(amount);
+  } catch {
+    return `${amount} ${currency}`;
+  }
+}
+
+function planPriceLabel(plan: BrainokStoreConfig["plans"][number], region: StoreRegion): string {
+  if (region === "international") {
+    return plan.paypalLabel ||
+      formatStorePrice(plan.paypalAmount ?? plan.amount, plan.paypalCurrency || plan.currency);
+  }
+
+  return plan.label;
+}
+
+function normalizeStoreConfig(config: BrainokStoreConfig): BrainokStoreConfig {
+  const plans = Array.isArray(config.plans) && config.plans.length > 0
+    ? config.plans
+    : DEFAULT_STORE_CONFIG.plans;
+
+  return {
+    ...DEFAULT_STORE_CONFIG,
+    ...config,
+    plans: plans.map((plan) => ({
+      ...plan,
+      label: plan.label || formatStorePrice(plan.amount, plan.currency),
+      paypalAmount: plan.paypalAmount ?? plan.amount,
+      paypalCurrency: plan.paypalCurrency || config.paypal?.currency || plan.currency,
+      paypalLabel: plan.paypalLabel ||
+        formatStorePrice(plan.paypalAmount ?? plan.amount, plan.paypalCurrency || config.paypal?.currency || plan.currency)
+    })),
+    bank: {
+      ...DEFAULT_STORE_CONFIG.bank,
+      ...(config.bank || {})
+    },
+    paypal: {
+      ...DEFAULT_STORE_CONFIG.paypal,
+      ...(config.paypal || {}),
+      clientId: config.paypal?.clientId || DEFAULT_STORE_CONFIG.paypal.clientId
+    }
+  };
+}
+
+function paymentErrorMessage(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : "";
+  return message.replace(/^Firebase:\s*/i, "").replace(/\s*\([^)]*\)\.?$/i, "").trim() || fallback;
 }
 
 function LicenseRequestDialog({
@@ -1203,6 +1724,7 @@ function AppsView({
   openAppRequest,
   onError,
   onOpenSupportRequest,
+  onOpenLicensePurchase,
   appType,
   emptyTitle,
   emptyAdminCopy,
@@ -1217,6 +1739,7 @@ function AppsView({
   openAppRequest: AppOpenRequest;
   onError: (message: string | null) => void;
   onOpenSupportRequest: (appId: string) => void;
+  onOpenLicensePurchase: () => void;
   appType: AppType;
   emptyTitle: string;
   emptyAdminCopy: string;
@@ -1320,6 +1843,7 @@ function AppsView({
           access={profile?.apps?.[selectedApp.appId]?.accessStatus === "active"}
           onBack={() => setSelectedAppId(null)}
           onOpenSupportRequest={() => onOpenSupportRequest(selectedApp.appId)}
+          onOpenLicensePurchase={onOpenLicensePurchase}
           language={language}
           text={text}
         />
@@ -1421,6 +1945,10 @@ function AppsView({
 
                 {!isWebApp ? (
                   <div className="button-row">
+                  <button className="button primary" type="button" onClick={onOpenLicensePurchase}>
+                    <ShoppingCart size={18} />
+                    {text.apps.buyLifetime}
+                  </button>
                   <button className="button primary" type="button" onClick={() => onOpenSupportRequest(app.appId)}>
                     <ReceiptText size={18} />
                     {text.apps.supportRequest}
@@ -1555,6 +2083,7 @@ function AppDetailView({
   access,
   onBack,
   onOpenSupportRequest,
+  onOpenLicensePurchase,
   language,
   text
 }: {
@@ -1562,6 +2091,7 @@ function AppDetailView({
   access: boolean;
   onBack: () => void;
   onOpenSupportRequest: () => void;
+  onOpenLicensePurchase: () => void;
   language: Language;
   text: UiText;
 }) {
@@ -1709,6 +2239,10 @@ function AppDetailView({
 
           {!isWebApp ? (
             <div className="button-row">
+            <button className="button primary" type="button" onClick={onOpenLicensePurchase}>
+              <ShoppingCart size={18} />
+              {text.apps.buyLifetime}
+            </button>
             <button className="button primary" type="button" onClick={onOpenSupportRequest}>
               <ReceiptText size={18} />
               {text.apps.supportRequest}
@@ -2755,13 +3289,150 @@ function AccountView({
       </div>
 
       {canManageApps ? (
-        <LicenseAdminPanel onError={onError} />
+        <>
+          <OrderAdminPanel onError={onError} />
+          <LicenseAdminPanel onError={onError} />
+        </>
       ) : null}
     </section>
   );
 }
 
 const FRIEND_SEVERANCE_CODE = "BRAINOK-SEVERANCE-2026";
+
+function OrderAdminPanel({ onError }: { onError: (message: string | null) => void }) {
+  const [orders, setOrders] = useState<BrainokOrderSummary[]>([]);
+  const [statusFilter, setStatusFilter] = useState("awaiting_payment");
+  const [busyOrderId, setBusyOrderId] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  const [panelError, setPanelError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void refreshOrders();
+  }, []);
+
+  async function refreshOrders(nextStatus = statusFilter) {
+    try {
+      setBusyOrderId("refresh");
+      setPanelError(null);
+      onError(null);
+      const nextOrders = await listOrders(nextStatus);
+      setOrders(nextOrders);
+    } catch (error) {
+      const message = licenseAdminErrorMessage(error, "Could not load orders.");
+      setPanelError(message);
+      onError(message);
+    } finally {
+      setBusyOrderId(null);
+    }
+  }
+
+  async function approveOrder(orderId: string) {
+    try {
+      setBusyOrderId(orderId);
+      setStatus(null);
+      setPanelError(null);
+      onError(null);
+      const result = await approveBankTransferOrder(orderId);
+      setStatus(`Approved ${orderId}. License ${result.license.licenseCode} was issued.`);
+      await refreshOrders();
+    } catch (error) {
+      const message = licenseAdminErrorMessage(error, "Could not approve payment.");
+      setPanelError(message);
+      onError(message);
+    } finally {
+      setBusyOrderId(null);
+    }
+  }
+
+  async function cancelSelectedOrder(orderId: string) {
+    try {
+      setBusyOrderId(orderId);
+      setStatus(null);
+      setPanelError(null);
+      onError(null);
+      await cancelOrder(orderId);
+      setStatus(`Cancelled ${orderId}.`);
+      await refreshOrders();
+    } catch (error) {
+      const message = licenseAdminErrorMessage(error, "Could not cancel order.");
+      setPanelError(message);
+      onError(message);
+    } finally {
+      setBusyOrderId(null);
+    }
+  }
+
+  function changeFilter(nextStatus: string) {
+    setStatusFilter(nextStatus);
+    void refreshOrders(nextStatus);
+  }
+
+  return (
+    <div className="account-panel order-admin-panel">
+      <div className="account-heading">
+        <div>
+          <h2>Orders</h2>
+          <p className="panel-copy">Review bank transfers and completed PayPal orders. Payment approval calls the centralized Brainok Lifetime License issuer.</p>
+        </div>
+        <a className="button secondary" href="/admin/orders">
+          <ExternalLink size={18} />
+          /admin/orders
+        </a>
+      </div>
+
+      <div className="inline-form order-filter-form">
+        <select value={statusFilter} onChange={(event) => changeFilter(event.target.value)}>
+          <option value="awaiting_payment">Awaiting payment</option>
+          <option value="paid">Paid</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+          <option value="failed">Failed</option>
+          <option value="all">All</option>
+        </select>
+        <button className="button secondary" type="button" disabled={busyOrderId === "refresh"} onClick={() => void refreshOrders()}>
+          <RotateCcw size={18} />
+          Refresh
+        </button>
+      </div>
+
+      <div className="order-list">
+        {orders.length > 0 ? orders.map((order) => {
+          const canApprove = order.paymentMethod === "bank_transfer" && (order.status === "awaiting_payment" || order.status === "paid");
+          const canCancel = order.status !== "completed" && order.status !== "cancelled";
+
+          return (
+            <article className="order-card" key={order.orderId}>
+              <div className="order-card-main">
+                <div>
+                  <span className="mini-label">{order.paymentMethod.replace("_", " ")}</span>
+                  <code>{order.orderId}</code>
+                  <small>{order.email} · {order.depositorName || "No depositor"} · {formatStorePrice(order.amount, order.currency)} · {order.status}</small>
+                  <small>{order.licenseCode ? `License: ${order.licenseCode}` : "License: not issued"}</small>
+                </div>
+                <div className="inline-actions">
+                  <button className="button primary" type="button" disabled={Boolean(busyOrderId) || !canApprove} onClick={() => void approveOrder(order.orderId)}>
+                    <CheckCircle2 size={18} />
+                    Approve Payment
+                  </button>
+                  <button className="button secondary" type="button" disabled={Boolean(busyOrderId) || !canCancel} onClick={() => void cancelSelectedOrder(order.orderId)}>
+                    <X size={18} />
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </article>
+          );
+        }) : (
+          <p className="quota-note">No orders found.</p>
+        )}
+      </div>
+
+      {status ? <p className="success-text">{status}</p> : null}
+      {panelError ? <p className="error-text inline-error">{panelError}</p> : null}
+    </div>
+  );
+}
 
 function LicenseAdminPanel({ onError }: { onError: (message: string | null) => void }) {
   const [licenses, setLicenses] = useState<LicenseSummary[]>([]);
@@ -2770,7 +3441,7 @@ function LicenseAdminPanel({ onError }: { onError: (message: string | null) => v
   const [email, setEmail] = useState("");
   const [plan, setPlan] = useState<BrainokLicensePlan>("personal");
   const [licenseCode, setLicenseCode] = useState("");
-  const [maxDevices, setMaxDevices] = useState("3");
+  const [maxDevices, setMaxDevices] = useState("2");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [panelError, setPanelError] = useState<string | null>(null);
@@ -2917,10 +3588,10 @@ function LicenseAdminPanel({ onError }: { onError: (message: string | null) => v
         <span className="role-badge admin">Universal</span>
       </div>
       <p className="panel-copy">
-        One Brainok license unlocks PageWheel, Clipboard, Hotkey Launcher, and future Brainok apps after the 30-day trial.
+        One Brainok Lifetime License unlocks every Brainok desktop app after the 30-day trial.
       </p>
       <p className="activation-note">
-        Current process: confirm payment manually, create the license here, and Resend will email the activation code when a buyer email is provided. Toss can later call the same license issuer after payment succeeds.
+        Payment providers confirm payment only. Bank transfer, PayPal, and future providers all call the same centralized lifetime license issuer.
       </p>
 
       <div className="license-admin-grid">
@@ -2936,18 +3607,13 @@ function LicenseAdminPanel({ onError }: { onError: (message: string | null) => v
               <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="buyer@example.com" />
             </label>
             <label>
-              Plan
-              <select value={plan} onChange={(event) => updatePlan(event.target.value as BrainokLicensePlan)}>
-                <option value="personal">Personal / 3 devices</option>
-                <option value="pro">Pro / 5 devices</option>
-                <option value="lab">Lab / 20-100 devices</option>
-                <option value="friend">Friend / shared code</option>
-              </select>
+              License type
+              <input value="Brainok Lifetime License" readOnly />
             </label>
             <label>
               Activation code
               <input value={licenseCode} onChange={(event) => setLicenseCode(event.target.value)} placeholder="Leave blank to generate" />
-              <small>Leave blank for Personal, Pro, or Lab. Use Friend only for one shared code.</small>
+              <small>Leave blank to generate a unique lifetime activation code.</small>
             </label>
             <label>
               Max devices
@@ -3055,7 +3721,7 @@ function defaultLicenseDeviceLimit(plan: BrainokLicensePlan) {
     return 50;
   }
 
-  return 3;
+  return 2;
 }
 
 function SupportResourcesEditor({
