@@ -2380,6 +2380,8 @@ function appSettingsFromRequest(
     releaseUrl?: string | null;
     macDownloadUrl?: string | null;
     windowsDownloadUrl?: string | null;
+    iosDownloadUrl?: string | null;
+    androidDownloadUrl?: string | null;
     docsUrl?: string | null;
     iconUrl?: string | null;
     thumbnailUrl?: string | null;
@@ -2448,6 +2450,12 @@ function appSettingsFromRequest(
       windowsUrl: data.windowsDownloadUrl === undefined
         ? defaults.windowsDownloadUrl ?? null
         : optionalUrl(data.windowsDownloadUrl),
+      iosUrl: data.iosDownloadUrl === undefined
+        ? defaults.iosDownloadUrl ?? null
+        : optionalUrl(data.iosDownloadUrl),
+      androidUrl: data.androidDownloadUrl === undefined
+        ? defaults.androidDownloadUrl ?? null
+        : optionalUrl(data.androidDownloadUrl),
       docsUrl: data.docsUrl === undefined
         ? defaults.docsUrl ?? null
         : optionalUrl(data.docsUrl),
@@ -2574,6 +2582,8 @@ export const updateApp = onCall({ region }, async (request) => {
       releaseUrl: asString(existingDownloads.releaseUrl) || null,
       macDownloadUrl: asString(existingDownloads.macUrl) || null,
       windowsDownloadUrl: asString(existingDownloads.windowsUrl) || null,
+      iosDownloadUrl: asString(existingDownloads.iosUrl) || null,
+      androidDownloadUrl: asString(existingDownloads.androidUrl) || null,
       docsUrl: asString(existingDownloads.docsUrl) || null,
       iconUrl: asString(existingMedia.iconUrl) || null,
       thumbnailUrl: asString(existingMedia.thumbnailUrl) || null,

@@ -97,6 +97,8 @@ export interface AppDownloads {
   releaseUrl?: string | null;
   macUrl?: string | null;
   windowsUrl?: string | null;
+  iosUrl?: string | null;
+  androidUrl?: string | null;
   docsUrl?: string | null;
   latestVersion?: string | null;
 }
@@ -232,6 +234,8 @@ export interface UpdateAppInput {
   releaseUrl?: string;
   macDownloadUrl?: string;
   windowsDownloadUrl?: string;
+  iosDownloadUrl?: string;
+  androidDownloadUrl?: string;
   docsUrl?: string;
   iconUrl?: string;
   thumbnailUrl?: string;
