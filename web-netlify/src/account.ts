@@ -593,7 +593,7 @@ export async function redeemInvite(code: string) {
   return result.data as { ok: true; benefit: "beta_access"; appId?: string | null };
 }
 
-export type ReleaseUploadTarget = "release" | "windows" | "mac" | "docs" | "icon" | "thumbnail" | "video";
+export type ReleaseUploadTarget = "release" | "windows" | "mac" | "ios" | "android" | "docs" | "icon" | "thumbnail" | "video";
 
 export async function uploadAppReleaseFile({
   appId,

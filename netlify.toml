@@ -3,6 +3,14 @@
   command = "npm run build"
   publish = "dist"
 
+# Appcast files are static build assets. Keep their XML content type explicit for
+# Sparkle clients, which reject HTML responses from the SPA fallback.
+[[headers]]
+  for = "/updates/*/appcast.xml"
+  [headers.values]
+    Content-Type = "application/xml; charset=utf-8"
+
+# Keep the SPA catch-all last so more specific routes can be added above it.
 [[redirects]]
   from = "/*"
   to = "/index.html"

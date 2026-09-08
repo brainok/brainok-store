@@ -3173,6 +3173,8 @@ function AccountView({
                           <option value="video">Demo video</option>
                           <option value="windows">Windows installer</option>
                           <option value="mac">Mac installer</option>
+                          <option value="ios">iPhone (iOS) app (.ipa)</option>
+                          <option value="android">Android app (.apk)</option>
                           <option value="release">Release page file</option>
                           <option value="docs">Manual or docs</option>
                         </select>
@@ -3189,6 +3191,7 @@ function AccountView({
                       </label>
                     </div>
                     <p className="quota-note">Use a square icon for menus, and a wider thumbnail for the app detail page.</p>
+                    {appUploadTarget === "ios" ? <p className="quota-note">IPA files require a supported signing and installation method. For general iPhone users, enter an App Store or TestFlight link below.</p> : null}
                   </div>
                   <label>
                     Visibility
@@ -3258,11 +3261,11 @@ function AccountView({
                   </label>
                   <label>
                     iPhone (iOS) download URL
-                    <input value={appDraft.iosDownloadUrl} onChange={(event) => setAppDraft({ ...appDraft, iosDownloadUrl: event.target.value })} placeholder="https://apps.apple.com/..." />
+                    <input value={appDraft.iosDownloadUrl} onChange={(event) => setAppDraft({ ...appDraft, iosDownloadUrl: event.target.value })} placeholder="App Store, TestFlight, or IPA download URL" />
                   </label>
                   <label>
                     Android download URL
-                    <input value={appDraft.androidDownloadUrl} onChange={(event) => setAppDraft({ ...appDraft, androidDownloadUrl: event.target.value })} placeholder="https://play.google.com/store/apps/details?id=..." />
+                    <input value={appDraft.androidDownloadUrl} onChange={(event) => setAppDraft({ ...appDraft, androidDownloadUrl: event.target.value })} placeholder="Google Play or APK download URL" />
                   </label>
                 </div>
 
@@ -3992,6 +3995,14 @@ function persistedText(value: string, maxLength: number) {
 }
 
 function attachUploadUrl(draft: AppDraft, target: ReleaseUploadTarget, url: string): AppDraft {
+  if (target === "ios") {
+    return { ...draft, iosDownloadUrl: url };
+  }
+
+  if (target === "android") {
+    return { ...draft, androidDownloadUrl: url };
+  }
+
   if (target === "windows") {
     return { ...draft, windowsDownloadUrl: url };
   }
@@ -4040,6 +4051,14 @@ function markdownImageAlt(fileName: string) {
 }
 
 function uploadAccept(target: ReleaseUploadTarget) {
+  if (target === "ios") {
+    return ".ipa";
+  }
+
+  if (target === "android") {
+    return ".apk,application/vnd.android.package-archive";
+  }
+
   if (target === "icon" || target === "thumbnail") {
     return "image/png,image/jpeg,image/webp,image/gif";
   }

@@ -2,6 +2,13 @@
   command = "npm run build"
   publish = "dist"
 
+# This config is also valid when web-netlify is deployed as the site root.
+[[headers]]
+  for = "/updates/*/appcast.xml"
+  [headers.values]
+    Content-Type = "application/xml; charset=utf-8"
+
+# Keep the SPA catch-all last so static appcast files are never shadowed.
 [[redirects]]
   from = "/*"
   to = "/index.html"
