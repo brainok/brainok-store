@@ -11,7 +11,7 @@ export type LicenseStatus =
   | "expired"
   | "refunded";
 
-export type PaymentProviderId = "manual" | "toss" | "legacy_external";
+export type PaymentProviderId = "manual" | "bank_transfer" | "paypal" | "toss" | "legacy_external";
 
 export type DeviceStatus = "active" | "revoked";
 
@@ -73,9 +73,11 @@ export interface BrainokLicense {
   licenseCode: string;
   email?: string | null;
   buyerName?: string | null;
+  licenseType?: "lifetime";
   plan: BrainokLicensePlan;
   status: BrainokLicenseStatus;
   maxDevices: number;
+  maxActivations?: number;
   activationCount: number;
   allowedApps: string[];
   emailDeliveryStatus?: "sent" | "failed" | "skipped" | string;
@@ -161,6 +163,8 @@ export interface BrainokApp {
     releaseUrl?: string | null;
     macUrl?: string | null;
     windowsUrl?: string | null;
+    iosUrl?: string | null;
+    androidUrl?: string | null;
     docsUrl?: string | null;
     latestVersion?: string | null;
   };
