@@ -3,6 +3,25 @@
     <channel>
         <title>Icon Cutter</title>
         <item>
+            <title>1.1.1</title>
+            <pubDate>Sun, 13 Sep 2026 20:09:00 +0900</pubDate>
+            <sparkle:version>102</sparkle:version>
+            <sparkle:shortVersionString>1.1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"># Icon Cutter v1.1.1
+
+- About, Check for Updates, and Activation are available in the app sidebar settings.
+- Adds a full-featured 30-day trial starting on first launch of this licensing-enabled version. Activation is required after expiry.
+- Brainok license activation is stored securely in this app's Keychain and works offline afterward.
+- Supports the Brainok compatibility codes and signed Icon Cutter codes; only Device ID is shared with other Brainok apps.
+- Manual update checks run immediately; automatic checks follow the seven-day success policy. Downloads require your approval.
+
+Made by Hyo Suk Nam · https://store.brainok.net
+</description>
+            <enclosure url="https://github.com/brainok/icon-cutter-mac-release/releases/download/v1.1.1/Brainok.IconCutter.dmg" length="6567243" type="application/x-apple-diskimage" sparkle:edSignature="mtv7kwK4Lib74fGEkK064S49u+OwqmT2w8kFXZxVeRrQksl1xjaSy7S1pSZH0KpOvquhIzvy2ooEGTzg1760DA==" />
+        </item>
+        <item>
             <title>1.0.0</title>
             <pubDate>Sun, 13 Sep 2026 09:33:29 +0900</pubDate>
             <sparkle:version>100</sparkle:version>
