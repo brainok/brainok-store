@@ -1,0 +1,25 @@
+<?xml version='1.0' encoding='utf-8'?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Icon Cutter</title>
+        <item>
+            <title>1.0.0</title>
+            <pubDate>Sun, 13 Sep 2026 09:33:29 +0900</pubDate>
+            <sparkle:version>100</sparkle:version>
+            <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"># Icon Cutter v1.0.0
+
+- Round image corners and export transparent PNGs.
+- Remove connected black backgrounds with adjustable strength and undo.
+- Drag to adjust the crop; save to the source image folder by default.
+- Check for updates from the app menu or automatically every seven days after a successful check.
+- Update downloads start only after you choose to update.
+
+Made by Hyo Suk Nam · https://store.brainok.net
+</description>
+            <enclosure url="https://github.com/brainok/icon-cutter-mac-release/releases/download/v1.0.0/Brainok.IconCutter.dmg" length="6477237" type="application/x-apple-diskimage" sparkle:edSignature="VT6KAcVeaDIMBulV1hpjbavXpkDOvYfcDor0qr9Tfb8blSrpvU1Qu6fDrBbjoESFyGuMcZYSAE063DWFAHB8Ag==" />
+        </item>
+    </channel>
+</rss>
