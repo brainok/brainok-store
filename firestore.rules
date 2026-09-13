@@ -78,6 +78,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /orders/{orderId} {
+      allow read, write: if false;
+    }
+
+    match /payments/{paymentId} {
+      allow read, write: if false;
+    }
+
     match /activations/{activationId} {
       allow read, write: if false;
     }

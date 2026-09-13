@@ -4,50 +4,96 @@
 
 Payments are separate from downloads. Brainok Store must always allow free downloads with no login, no email, and no payment.
 
-Payment exists only to issue a Brainok License after a user decides to support or buy after the 30-day trial.
+Payment exists only to confirm that a customer paid. License activation is handled by the centralized Brainok Firebase license system.
 
-## Current Operation
+## Phase 1 Operation
 
-Current payment/license operation is manual:
-
-```text
-Supporter contacts Brainok
-  -> Admin confirms supporter/payment manually
-  -> Admin creates Brainok License
-  -> Admin emails license code from brainok777@gmail.com
-  -> User activates inside app
-```
-
-Support email:
+There is one product:
 
 ```text
-brainok777@gmail.com
+Brainok Lifetime License
 ```
 
-## Future Toss Payments Flow
+The license:
 
-Future automated flow:
+- activates every Brainok desktop application
+- is a one-time purchase
+- has no expiration date
+- has no subscription or monthly billing
+- supports the selected device limit
+
+Customer options:
+
+- 2 devices: 20,000 KRW for Korea bank transfer, 15 USD for PayPal
+- 5 devices: 40,000 KRW for Korea bank transfer, 30 USD for PayPal
+
+Region controls the payment method:
+
+- Korea: bank transfer
+- International: PayPal Checkout
+
+Users can manually select the region. The site must not rely only on IP address.
+
+## Central License Issuing Function
+
+Every successful payment path must call:
 
 ```text
-User chooses license plan
-  -> Toss Payments checkout
-  -> Payment success redirect
-  -> Server confirms payment with Toss Payments
-  -> Firebase records payment
-  -> Server creates Brainok License
-  -> Firebase records license
-  -> Email is sent to user
-  -> User enters license code inside any Brainok app
-  -> App activates once online and then works offline
+issueBrainokLifetimeLicense()
 ```
 
-Official Toss Payments docs currently describe success redirect parameters such as `paymentKey`, `orderId`, and `amount`, and webhooks for real-time payment events:
+This function:
 
-- https://docs.tosspayments.com/en/integration
-- https://docs.tosspayments.com/en/api-guide
-- https://docs.tosspayments.com/en/webhooks
+- generates the Brainok license code
+- writes `/licenses/{licenseCode}`
+- sets `licenseType: "lifetime"`
+- sets `status: "active"`
+- sets `maxDevices` and `maxActivations` from the purchased plan
+- sends the activation email through Resend
+- records email delivery fields on the license
 
-Before implementation, re-check the current Toss docs and dashboard settings because payment APIs and webhook signing requirements can change.
+Payment providers must not generate licenses directly.
+
+## Firestore
+
+Orders are stored in:
+
+```json
+{
+  "orderId": "BRN-20260722-ABC123",
+  "email": "buyer@example.com",
+  "depositorName": "Buyer Name",
+  "amount": 0,
+  "currency": "KRW",
+  "status": "awaiting_payment",
+  "paymentMethod": "bank_transfer",
+  "licenseType": "lifetime",
+  "planId": "lifetime_2",
+  "maxDevices": 2,
+  "maxActivations": 2,
+  "createdAt": "serverTimestamp"
+}
+```
+
+Licenses are stored in:
+
+```json
+{
+  "licenseId": "lic_...",
+  "licenseCode": "BRAINOK-SUPPORTER-....",
+  "email": "buyer@example.com",
+  "licenseType": "lifetime",
+  "plan": "personal",
+  "status": "active",
+  "maxDevices": 2,
+  "maxActivations": 2,
+  "allowedApps": ["*"],
+  "issuedAt": "serverTimestamp",
+  "expiresAt": null
+}
+```
+
+The `plan: "personal"` field remains for backward compatibility with existing desktop activation code. The user-facing license type is Brainok Lifetime License.
 
 ## Payment Boundary
 
@@ -64,92 +110,75 @@ The website and backend know:
 - checkout session
 - payment status
 - payment amount
-- license plan
+- license type
 - license email delivery
 
-## Product Model
+## Korea Bank Transfer
 
-The payment product should map to Brainok License plans, not individual applications.
+The customer enters:
 
-Recommended products:
+- email
+- depositor name
+- agreement checkbox
 
-| Product | Plan | Default Devices | Notes |
-| --- | --- | ---: | --- |
-| Brainok Personal License | `personal` | 3 | Individual use |
-| Brainok Pro License | `pro` | 5 | Multi-device professional use |
-| Brainok Lab License | `lab` | 20+ | Managed manually or quoted |
+The server creates `/orders/{orderId}` with `status: "awaiting_payment"`.
 
-The payment layer should not hardcode the final device count. It should look up the plan in Firebase, then stamp the chosen `maxDevices` onto the license at issuance time.
+The admin opens `/admin/orders`, confirms the bank transfer, and clicks `Approve Payment`.
 
-## Order Creation
+Approval updates the order to `paid`, calls `issueBrainokLifetimeLicense()`, then updates the order to `completed`.
 
-Recommended server-created order fields:
+## International PayPal Checkout
 
-```json
-{
-  "orderId": "brn_20260704_...",
-  "provider": "toss",
-  "plan": "personal",
-  "amount": 99000,
-  "currency": "KRW",
-  "buyerEmail": "user@example.com",
-  "status": "created",
-  "createdAt": "serverTimestamp"
-}
+The site uses the official PayPal JavaScript SDK. The browser never issues a license.
+
+PayPal checkout uses USD because PayPal Orders API does not support KRW checkout orders for this account. Korea bank transfer remains KRW.
+
+Flow:
+
+```text
+Buyer clicks PayPal
+  -> Browser asks Firebase Functions to create a PayPal order
+  -> Buyer approves in PayPal
+  -> Browser asks Firebase Functions to capture the PayPal order
+  -> Server verifies PayPal status, amount, and currency
+  -> Server calls issueBrainokLifetimeLicense()
+  -> Server sends the license email
 ```
 
-The frontend can request a checkout from a server function. The server function should create a pending payment/order record before redirecting to Toss.
+## Configuration
 
-## Payment Confirmation
+Defaults live in `firebase-functions/src/store-config.ts`, and production should override values through environment variables or Firebase secrets.
 
-The success redirect should not by itself issue a license. It should trigger server confirmation.
+Environment variables:
 
-Required confirmation checks:
+- `BRAINOK_LIFETIME_2_AMOUNT`
+- `BRAINOK_LIFETIME_2_CURRENCY`
+- `BRAINOK_LIFETIME_5_AMOUNT`
+- `BRAINOK_LIFETIME_5_CURRENCY`
+- `PAYPAL_LIFETIME_2_AMOUNT`
+- `PAYPAL_LIFETIME_2_CURRENCY`
+- `PAYPAL_LIFETIME_5_AMOUNT`
+- `PAYPAL_LIFETIME_5_CURRENCY`
+- `BRAINOK_PAYPAL_CURRENCY`
+- `BANK_NAME`
+- `BANK_ACCOUNT_NUMBER`
+- `BANK_ACCOUNT_HOLDER`
+- `PAYPAL_CLIENT_ID`
+- `PAYPAL_SECRET`
+- `PAYPAL_ENVIRONMENT`
+- `SUPPORT_EMAIL`
 
-- `paymentKey` exists.
-- `orderId` matches an existing pending payment.
-- `amount` matches the server-side expected amount.
-- payment status from Toss is successful.
-- payment has not already created a license.
+Firebase secrets:
 
-Only after these checks should the backend create a Brainok License.
+- `RESEND_API_KEY`
 
-## Webhooks
+Current bank transfer defaults:
 
-Webhooks are the reliability layer.
-
-Use webhooks to handle:
-
-- payment approved
-- payment canceled
-- refund
-- partial refund, if supported by the final product policy
-- payment failure or dispute events if exposed
-
-Webhook processing must be idempotent:
-
-- compute or store provider event ID
-- write `/webhookEvents/{eventId}`
-- skip duplicate events
-- never create duplicate licenses for the same paid order
-
-## License Generation After Payment
-
-After confirmed payment:
-
-1. Load plan config from `/licensePlans/{plan}`.
-2. Create `/payments/{paymentId}` or update it to `paid`.
-3. Create `/licenses/{licenseCode}` with:
-   - `source: "toss"`
-   - `paymentId`
-   - `provider: "toss"`
-   - `emailLower`
-   - `plan`
-   - `maxDevices`
-   - `allowedApps: ["*"]`
-4. Send the license email through Resend when a buyer email is present.
-5. Write `/mailLogs/{mailLogId}` and update the license email delivery fields.
-6. If email delivery fails, keep the paid license and mark the email status as `failed`.
+```text
+Bank: 우리은행
+Account: 126-296921-12-001
+Account Holder: 남효석
+```
 
 ## Email Delivery
 
@@ -162,8 +191,7 @@ Reply-To: brainok777@gmail.com
 
 Email content should include:
 
-- Brainok License code
-- plan name
+- Brainok Lifetime License code
 - device limit
 - activation instructions
 - support email
@@ -193,7 +221,7 @@ Manual flow:
 ```text
 Admin receives request
   -> Admin records supporter in Firebase
-  -> Admin creates license with source "manual"
+  -> Admin creates Brainok Lifetime License with source "manual"
   -> Admin sends or resends license email
 ```
 
@@ -211,13 +239,17 @@ Admin capabilities:
 
 - create manual payment/supporter record
 - create license
-- search payment by email, order ID, license code, or payment key
+- review orders by status
+- approve bank transfer orders
+- cancel pending orders
 - resend license email
 - disable license after refund or abuse
 - reset devices for support cases
 - add internal support note
 
-## Implementation Notes
+## Future Providers
+
+Future providers such as Toss Payments, Stripe, and Paddle should only confirm payment and write payment records. After server-side verification succeeds, they should call `issueBrainokLifetimeLicense()` without changing the licensing system.
 
 The payment layer is provider-agnostic. Do not let any payment provider call or
 change desktop activation code directly. Providers should record payment state,
