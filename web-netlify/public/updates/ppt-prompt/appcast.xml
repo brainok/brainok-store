@@ -1,0 +1,26 @@
+<?xml version='1.0' encoding='utf-8'?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>PPT prompt</title>
+        <item>
+            <title>1.1.0</title>
+            <pubDate>Sun, 13 Sep 2026 22:37:32 +0900</pubDate>
+            <sparkle:version>28</sparkle:version>
+            <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown">PPT prompt 1.1.0
+
+발표 대본 사본 자동 저장, 슬라이드별 녹음과 로컬/OpenAI 음성 인식, 파형 편집·무음 정리, 음량 보정 및 전체 녹음 MP4 내보내기를 제공합니다.
+앱 아이콘, 앱 정보·Activation, 7일 간격 업데이트 확인을 포함합니다. 업데이트 파일은 사용자가 선택한 뒤 다운로드합니다.
+
+기존 Bundle ID, API 키 및 라이선스 저장소, 체험 시작일, 사용자 설정·대본·녹음을 유지합니다.
+라이선스 기능이 처음 포함된 버전을 실행한 날부터 30일 체험판을 제공하며, 이미 시작된 체험 기간은 초기화하지 않습니다.
+
+지원: macOS 14 이상, Apple Silicon.
+Made by Hyo Suk Nam · brainok777@gmail.com · https://store.brainok.net
+</description>
+            <enclosure url="https://github.com/brainok/powerpointer-prompt-evenG2-release/releases/download/v1.1.0/Brainok.PPTPrompt.dmg" length="3109646" type="application/x-apple-diskimage" sparkle:edSignature="UofE0LKbjPrUa4RVMq1zjYWb/8ZDjb+X40JU+6GJFv4K2V6dG6/KAAcdkPijAzw5jRGXdex67OJpEjhs0gXRDA==" />
+        </item>
+    </channel>
+</rss>
