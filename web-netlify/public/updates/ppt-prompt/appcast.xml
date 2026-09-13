@@ -3,6 +3,23 @@
     <channel>
         <title>PPT prompt</title>
         <item>
+            <title>1.2.0</title>
+            <pubDate>Sun, 13 Sep 2026 23:01:28 +0900</pubDate>
+            <sparkle:version>29</sparkle:version>
+            <sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown">PPT prompt 1.2.0
+
+발표 화면과 음성 파형을 입체적으로 표현한 새 앱 아이콘을 적용했습니다. Dock·Finder·앱 정보·DMG에 같은 아이콘을 사용합니다.
+
+기존 대본·녹음·사용자 설정·API 키·라이선스와 체험 시작일을 유지합니다.
+지원: macOS 14 이상, Apple Silicon.
+Made by Hyo Suk Nam · brainok777@gmail.com · https://store.brainok.net
+</description>
+            <enclosure url="https://github.com/brainok/powerpointer-prompt-evenG2-release/releases/download/v1.2.0/Brainok.PPTPrompt.dmg" length="6229243" type="application/x-apple-diskimage" sparkle:edSignature="JPbU/t3AfL0Q+ijFJccP0ApzztvFdpL35nyrD+obg6SRm6/Fazo+HpKldCdeNJbn0U2JwHa8q/wYWadhbE4eAw==" />
+        </item>
+        <item>
             <title>1.1.0</title>
             <pubDate>Sun, 13 Sep 2026 22:37:32 +0900</pubDate>
             <sparkle:version>28</sparkle:version>
