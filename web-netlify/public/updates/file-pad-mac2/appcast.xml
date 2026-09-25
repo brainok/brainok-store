@@ -8,4 +8,6 @@
 
 macOS 13 이상, Apple Silicon용입니다.
 기존 메모·폴더·깃발·암호화 형식 및 활성화 식별자를 유지합니다.
-</description><sparkle:version>332</sparkle:version><sparkle:shortVersionString>3.4.0</sparkle:shortVersionString><sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion><enclosure url="https://github.com/brainok/File-pad-mac2-release/releases/download/v3.4.0/File%20Pad%202.dmg" length="5328637" type="application/octet-stream" sparkle:edSignature="eJOls8z+VTIkmau4/EYxWd0TjASAYJvB0fCHP0LRVmLkZFrx8gZWNHTPqDuglgcn+HrTWX72ajPAJa9dioqoAA==" /></item></channel></rss>
+
+첫 정식 배포는 DMG로 직접 설치해 주세요. PREPARE 3.3.0의 다운로드 주소 검사 규칙은 GitHub의 공백 정규화와 호환되지 않습니다. 3.4.0에서는 정규화된 공개 파일명을 지원합니다.
+</description><sparkle:version>332</sparkle:version><sparkle:shortVersionString>3.4.0</sparkle:shortVersionString><sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion><enclosure url="https://github.com/brainok/File-pad-mac2-release/releases/download/v3.4.0/File.Pad.2.dmg" length="5328504" type="application/octet-stream" sparkle:edSignature="kXN1aNyFP8c4Gr2BkeifRIDr7WLUdsGgN9XpA61NxRlrbFiE1RnPa+WZErhB+bWlKDsE3RCo+DsHHnZ36DNdAw==" /></item></channel></rss>
