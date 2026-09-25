@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8'?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0"><channel><title>File Pad 2</title><item><title>File Pad 2 3.4.0</title><description>File Pad 2 3.4.0 (332)
+
+- 원노트 붙여넣기 및 전체 본문 복사: 클립보드의 그림과 굵은 글씨를 보존합니다.
+- 전체 메모의 표시 글자 크기와 줄 간격을 조절할 수 있습니다.
+- 이미지 삽입과 비율을 유지하는 표시 크기 조절을 지원합니다.
+- Sparkle 업데이트 확인과 기존 라이선스·체험 상태 처리의 검증을 보강했습니다.
+
+macOS 13 이상, Apple Silicon용입니다.
+기존 메모·폴더·깃발·암호화 형식 및 활성화 식별자를 유지합니다.
+</description><sparkle:version>332</sparkle:version><sparkle:shortVersionString>3.4.0</sparkle:shortVersionString><sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion><enclosure url="https://github.com/brainok/File-pad-mac2-release/releases/download/v3.4.0/File%20Pad%202.dmg" length="5328637" type="application/octet-stream" sparkle:edSignature="eJOls8z+VTIkmau4/EYxWd0TjASAYJvB0fCHP0LRVmLkZFrx8gZWNHTPqDuglgcn+HrTWX72ajPAJa9dioqoAA==" /></item></channel></rss>
