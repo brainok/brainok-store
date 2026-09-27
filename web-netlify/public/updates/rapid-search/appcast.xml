@@ -3,6 +3,17 @@
     <channel>
         <title>Rapid Search</title>
         <item>
+            <title>1.0.6</title>
+            <pubDate>Sun, 27 Sep 2026 10:19:41 +0900</pubDate>
+            <sparkle:version>14</sparkle:version>
+            <sparkle:shortVersionString>1.0.6</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="plain-text"><![CDATA[Rapid Search 1.0.6 adds a 30-day trial, Brainok license activation, manual update checks in Settings, and full indexing controls.
+]]></description>
+            <enclosure url="https://github.com/brainok/rapid-search-mac-release/releases/download/v1.0.6/Rapid.Search.dmg" length="3428063" type="application/octet-stream" sparkle:edSignature="1j6ZrTyamgDAL266fZbiR+ixgaOed6xf1uznRWv3e7VwtnPq3yJx3TOWduY4AxUjFtJQZSyBthcrwSXlH4aVDA=="/>
+        </item>
+        <item>
             <title>1.0.5</title>
             <pubDate>Sun, 27 Sep 2026 09:38:22 +0900</pubDate>
             <sparkle:version>13</sparkle:version>
