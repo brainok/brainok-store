@@ -3,6 +3,17 @@
     <channel>
         <title>Rapid Search</title>
         <item>
+            <title>1.0.5</title>
+            <pubDate>Sun, 27 Sep 2026 09:38:22 +0900</pubDate>
+            <sparkle:version>13</sparkle:version>
+            <sparkle:shortVersionString>1.0.5</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="plain-text"><![CDATA[Rapid Search 1.0.5 strengthens DMG signing and includes the automated release workflow. Existing Sparkle-enabled installations can update from 1.0.4 after user approval.
+]]></description>
+            <enclosure url="https://github.com/brainok/rapid-search-mac-release/releases/download/v1.0.5/Rapid.Search.dmg" length="3350303" type="application/octet-stream" sparkle:edSignature="7EwM0bBssSwtbAPnG1eVLgW8cQbA9rUrFoVRPMlEN38peADYn0tbQGwXrPmm1IyosxhrYsmub2ryImYacqKCCw=="/>
+        </item>
+        <item>
             <title>1.0.4</title>
             <pubDate>Sun, 27 Sep 2026 09:28:05 +0900</pubDate>
             <sparkle:version>12</sparkle:version>
