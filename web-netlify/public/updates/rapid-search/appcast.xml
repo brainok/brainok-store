@@ -1,0 +1,17 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Rapid Search</title>
+        <item>
+            <title>1.0.4</title>
+            <pubDate>Sun, 27 Sep 2026 09:28:05 +0900</pubDate>
+            <sparkle:version>12</sparkle:version>
+            <sparkle:shortVersionString>1.0.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="plain-text"><![CDATA[Rapid Search 1.0.4 adds signed, user-approved updates through Sparkle. Updates are checked no more than once every seven days, and the menu has Check for Updates… for an immediate manual check.
+]]></description>
+            <enclosure url="https://github.com/brainok/rapid-search-mac-release/releases/download/v1.0.4/Rapid.Search.dmg" length="3340425" type="application/octet-stream" sparkle:edSignature="FjXAR8LXZw4QFkGJMbnMBszVvQL1C68ygD5rQ8KdzF6nCA1bTxfXnWAHotHMWb0rG7YxHRBrLz00EJQonSfvCw=="/>
+        </item>
+    </channel>
+</rss>
