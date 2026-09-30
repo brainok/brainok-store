@@ -3,41 +3,23 @@
     <channel>
         <title>PPT prompt</title>
         <item>
-            <title>1.2.0</title>
-            <pubDate>Sun, 13 Sep 2026 23:01:28 +0900</pubDate>
-            <sparkle:version>29</sparkle:version>
-            <sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>
+            <title>1.3.1</title>
+            <pubDate>Wed, 30 Sep 2026 16:58:32 +0900</pubDate>
+            <sparkle:version>31</sparkle:version>
+            <sparkle:shortVersionString>1.3.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown">PPT prompt 1.2.0
+            <description sparkle:format="markdown">PPT prompt 1.3.1
 
-발표 화면과 음성 파형을 입체적으로 표현한 새 앱 아이콘을 적용했습니다. Dock·Finder·앱 정보·DMG에 같은 아이콘을 사용합니다.
+PowerPoint 슬라이드를 원본 디자인과 글꼴이 유지된 이미지로 표시하는 썸네일 미리보기를 추가했습니다. 텍스트 발표 작성, 폰 발표 내보내기와 화면 구성을 개선했습니다.
 
-기존 대본·녹음·사용자 설정·API 키·라이선스와 체험 시작일을 유지합니다.
+Sparkle 업데이트 서명키를 새 키로 전환했습니다. 1.2.0 사용자는 이번 버전을 DMG로 한 번 직접 설치해야 하며, 이후 버전부터 자동 업데이트를 다시 사용할 수 있습니다.
+
+기존 대본·녹음·사용자 설정·API 키·라이선스와 체험 시작일은 유지됩니다.
 지원: macOS 14 이상, Apple Silicon.
 Made by Hyo Suk Nam · brainok777@gmail.com · https://store.brainok.net
 </description>
-            <enclosure url="https://github.com/brainok/powerpointer-prompt-evenG2-release/releases/download/v1.2.0/Brainok.PPTPrompt.dmg" length="6229243" type="application/x-apple-diskimage" sparkle:edSignature="JPbU/t3AfL0Q+ijFJccP0ApzztvFdpL35nyrD+obg6SRm6/Fazo+HpKldCdeNJbn0U2JwHa8q/wYWadhbE4eAw==" />
-        </item>
-        <item>
-            <title>1.1.0</title>
-            <pubDate>Sun, 13 Sep 2026 22:37:32 +0900</pubDate>
-            <sparkle:version>28</sparkle:version>
-            <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown">PPT prompt 1.1.0
-
-발표 대본 사본 자동 저장, 슬라이드별 녹음과 로컬/OpenAI 음성 인식, 파형 편집·무음 정리, 음량 보정 및 전체 녹음 MP4 내보내기를 제공합니다.
-앱 아이콘, 앱 정보·Activation, 7일 간격 업데이트 확인을 포함합니다. 업데이트 파일은 사용자가 선택한 뒤 다운로드합니다.
-
-기존 Bundle ID, API 키 및 라이선스 저장소, 체험 시작일, 사용자 설정·대본·녹음을 유지합니다.
-라이선스 기능이 처음 포함된 버전을 실행한 날부터 30일 체험판을 제공하며, 이미 시작된 체험 기간은 초기화하지 않습니다.
-
-지원: macOS 14 이상, Apple Silicon.
-Made by Hyo Suk Nam · brainok777@gmail.com · https://store.brainok.net
-</description>
-            <enclosure url="https://github.com/brainok/powerpointer-prompt-evenG2-release/releases/download/v1.1.0/Brainok.PPTPrompt.dmg" length="3109646" type="application/x-apple-diskimage" sparkle:edSignature="UofE0LKbjPrUa4RVMq1zjYWb/8ZDjb+X40JU+6GJFv4K2V6dG6/KAAcdkPijAzw5jRGXdex67OJpEjhs0gXRDA==" />
+            <enclosure url="https://github.com/brainok/powerpointer-prompt-mac-release/releases/download/v1.3.1/Brainok.PPTPrompt.dmg" length="6277821" type="application/x-apple-diskimage" sparkle:edSignature="SQPCEEJQXTXSlYbIyI/xZPtkr4SBWvp8xXVQ2g5bRRWyf55JYpkKr8g0C52u8rRRqPKNusAZvulywvbuesSIAg==" />
         </item>
     </channel>
 </rss>
