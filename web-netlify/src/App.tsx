@@ -195,6 +195,8 @@ const UI_TEXT = {
       note: "무료 다운로드. 계정은 필요 없습니다. 앱을 실행하면 30일 체험판이 시작되고, 이후 앱 안에서 Brainok 라이선스를 입력할 수 있습니다.",
       downloadWin: "Windows 다운로드",
       downloadMac: "Mac 다운로드",
+      downloadIphone: "아이폰 다운로드",
+      downloadAndroid: "안드로이드 다운로드",
       releasePage: "릴리스 페이지"
     },
     subscriptionPage: {
@@ -374,6 +376,8 @@ const UI_TEXT = {
       note: "Download free. No account required. The app starts a 30-day trial and accepts a Brainok license inside the app.",
       downloadWin: "Windows Download",
       downloadMac: "Download Mac",
+      downloadIphone: "Download iPhone",
+      downloadAndroid: "Download Android",
       releasePage: "Release page"
     },
     subscriptionPage: {
@@ -1405,7 +1409,7 @@ function AppsView({
                   <div className="download-actions">
                     {downloadLinks.length > 0 ? (
                     downloadLinks.map((downloadLink, index) => (
-                      <a className={`${index === 0 ? "button primary" : "button secondary"}${downloadLink.kind === "windows" ? " download-windows" : ""}`} href={downloadLink.href} key={downloadLink.label}>
+                      <a className={`${index === 0 ? "button primary" : "button secondary"}${downloadLink.kind === "windows" ? " download-windows" : ""}${downloadLink.kind === "ios" || (downloadLink.kind === "android" && !app.downloads?.iosUrl) ? " download-mobile-start" : ""}`} href={downloadLink.href} key={downloadLink.label}>
                         <Download size={18} />
                         {localizedDownloadLabel(downloadLink.kind, text)}
                       </a>
@@ -1693,7 +1697,7 @@ function AppDetailView({
             <div className="download-actions detail-downloads">
               {downloadLinks.length > 0 ? (
               downloadLinks.map((downloadLink, index) => (
-                <a className={`${index === 0 ? "button primary" : "button secondary"}${downloadLink.kind === "windows" ? " download-windows" : ""}`} href={downloadLink.href} key={downloadLink.label}>
+                <a className={`${index === 0 ? "button primary" : "button secondary"}${downloadLink.kind === "windows" ? " download-windows" : ""}${downloadLink.kind === "ios" || (downloadLink.kind === "android" && !app.downloads?.iosUrl) ? " download-mobile-start" : ""}`} href={downloadLink.href} key={downloadLink.label}>
                   <Download size={18} />
                   {localizedDownloadLabel(downloadLink.kind, text)}
                 </a>
@@ -1985,7 +1989,7 @@ function DownloadView({
                 <div className="download-actions">
                   {downloadLinks.length > 0 ? (
                     downloadLinks.map((downloadLink, index) => (
-                      <a className={`${index === 0 ? "button primary" : "button secondary"}${downloadLink.kind === "windows" ? " download-windows" : ""}`} href={downloadLink.href} key={downloadLink.label}>
+                      <a className={`${index === 0 ? "button primary" : "button secondary"}${downloadLink.kind === "windows" ? " download-windows" : ""}${downloadLink.kind === "ios" || (downloadLink.kind === "android" && !app.downloads?.iosUrl) ? " download-mobile-start" : ""}`} href={downloadLink.href} key={downloadLink.label}>
                         <Download size={18} />
                         {localizedDownloadLabel(downloadLink.kind, text)}
                       </a>
@@ -2635,6 +2639,8 @@ function AccountView({
                           <option value="video">Demo video</option>
                           <option value="windows">Windows installer</option>
                           <option value="mac">Mac installer</option>
+                          <option value="ios">iPhone (iOS) app (.ipa)</option>
+                          <option value="android">Android app (.apk)</option>
                           <option value="release">Release page file</option>
                           <option value="docs">Manual or docs</option>
                         </select>
@@ -2651,6 +2657,7 @@ function AccountView({
                       </label>
                     </div>
                     <p className="quota-note">Use a square icon for menus, and a wider thumbnail for the app detail page.</p>
+                    {appUploadTarget === "ios" ? <p className="quota-note">IPA files require a supported signing and installation method. For general iPhone users, enter an App Store or TestFlight link below.</p> : null}
                   </div>
                   <label>
                     Visibility
@@ -2717,6 +2724,14 @@ function AccountView({
                   <label>
                     Windows download URL
                     <input value={appDraft.windowsDownloadUrl} onChange={(event) => setAppDraft({ ...appDraft, windowsDownloadUrl: event.target.value })} />
+                  </label>
+                  <label>
+                    iPhone (iOS) download URL
+                    <input value={appDraft.iosDownloadUrl} onChange={(event) => setAppDraft({ ...appDraft, iosDownloadUrl: event.target.value })} placeholder="App Store, TestFlight, or IPA download URL" />
+                  </label>
+                  <label>
+                    Android download URL
+                    <input value={appDraft.androidDownloadUrl} onChange={(event) => setAppDraft({ ...appDraft, androidDownloadUrl: event.target.value })} placeholder="Google Play or APK download URL" />
                   </label>
                 </div>
 
@@ -3200,6 +3215,8 @@ interface AppDraft {
   releaseUrl: string;
   macDownloadUrl: string;
   windowsDownloadUrl: string;
+  iosDownloadUrl: string;
+  androidDownloadUrl: string;
   docsUrl: string;
   iconUrl: string;
   thumbnailUrl: string;
@@ -3227,6 +3244,8 @@ const emptyAppDraft: AppDraft = {
   releaseUrl: "",
   macDownloadUrl: "",
   windowsDownloadUrl: "",
+  iosDownloadUrl: "",
+  androidDownloadUrl: "",
   docsUrl: "",
   iconUrl: "",
   thumbnailUrl: "",
@@ -3255,6 +3274,8 @@ function appToDraft(app: BrainokApp): AppDraft {
     releaseUrl: app.downloads?.releaseUrl || "",
     macDownloadUrl: app.downloads?.macUrl || "",
     windowsDownloadUrl: app.downloads?.windowsUrl || "",
+    iosDownloadUrl: app.downloads?.iosUrl || "",
+    androidDownloadUrl: app.downloads?.androidUrl || "",
     docsUrl: app.downloads?.docsUrl || "",
     iconUrl: app.media?.iconUrl || "",
     thumbnailUrl: app.media?.thumbnailUrl || "",
@@ -3284,6 +3305,8 @@ function draftToUpdate(draft: AppDraft) {
     releaseUrl: draft.releaseUrl,
     macDownloadUrl: draft.macDownloadUrl,
     windowsDownloadUrl: draft.windowsDownloadUrl,
+    iosDownloadUrl: draft.iosDownloadUrl,
+    androidDownloadUrl: draft.androidDownloadUrl,
     docsUrl: draft.docsUrl,
     iconUrl: toStorableImageUrl(draft.iconUrl),
     thumbnailUrl: toStorableImageUrl(draft.thumbnailUrl),
@@ -3306,6 +3329,14 @@ function persistedText(value: string, maxLength: number) {
 }
 
 function attachUploadUrl(draft: AppDraft, target: ReleaseUploadTarget, url: string): AppDraft {
+  if (target === "ios") {
+    return { ...draft, iosDownloadUrl: url };
+  }
+
+  if (target === "android") {
+    return { ...draft, androidDownloadUrl: url };
+  }
+
   if (target === "windows") {
     return { ...draft, windowsDownloadUrl: url };
   }
@@ -3354,6 +3385,14 @@ function markdownImageAlt(fileName: string) {
 }
 
 function uploadAccept(target: ReleaseUploadTarget) {
+  if (target === "ios") {
+    return ".ipa";
+  }
+
+  if (target === "android") {
+    return ".apk,application/vnd.android.package-archive";
+  }
+
   if (target === "icon" || target === "thumbnail") {
     return "image/png,image/jpeg,image/webp,image/gif";
   }
@@ -3878,7 +3917,7 @@ function formatTimestamp(value: unknown, language: Language = "en", emptyLabel =
   }).format(new Date(millis));
 }
 
-type DownloadLinkKind = "windows" | "mac" | "release";
+type DownloadLinkKind = "windows" | "mac" | "ios" | "android" | "release";
 
 function appDownloadLinks(app: BrainokApp) {
   const links: Array<{ kind: DownloadLinkKind; label: string; href: string }> = [];
@@ -3893,6 +3932,14 @@ function appDownloadLinks(app: BrainokApp) {
 
   if (app.downloads?.windowsUrl) {
     links.push({ kind: "windows", label: "Download Win", href: app.downloads.windowsUrl });
+  }
+
+  if (app.downloads?.iosUrl) {
+    links.push({ kind: "ios", label: "Download iPhone", href: app.downloads.iosUrl });
+  }
+
+  if (app.downloads?.androidUrl) {
+    links.push({ kind: "android", label: "Download Android", href: app.downloads.androidUrl });
   }
 
   if (links.length === 0 && app.downloads?.releaseUrl) {
@@ -3947,6 +3994,14 @@ function localizedDownloadLabel(kind: DownloadLinkKind, text: UiText): ReactNode
 
   if (kind === "mac") {
     return text.download.downloadMac;
+  }
+
+  if (kind === "ios") {
+    return text.download.downloadIphone;
+  }
+
+  if (kind === "android") {
+    return text.download.downloadAndroid;
   }
 
   return text.download.releasePage;

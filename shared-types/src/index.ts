@@ -161,6 +161,8 @@ export interface BrainokApp {
     releaseUrl?: string | null;
     macUrl?: string | null;
     windowsUrl?: string | null;
+    iosUrl?: string | null;
+    androidUrl?: string | null;
     docsUrl?: string | null;
     latestVersion?: string | null;
   };

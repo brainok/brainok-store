@@ -97,6 +97,8 @@ export interface AppDownloads {
   releaseUrl?: string | null;
   macUrl?: string | null;
   windowsUrl?: string | null;
+  iosUrl?: string | null;
+  androidUrl?: string | null;
   docsUrl?: string | null;
   latestVersion?: string | null;
 }
@@ -188,6 +190,8 @@ export interface UpdateAppInput {
   releaseUrl?: string;
   macDownloadUrl?: string;
   windowsDownloadUrl?: string;
+  iosDownloadUrl?: string;
+  androidDownloadUrl?: string;
   docsUrl?: string;
   iconUrl?: string;
   thumbnailUrl?: string;
@@ -453,7 +457,7 @@ export async function redeemInvite(code: string) {
   return result.data as { ok: true; benefit: "beta_access"; appId?: string | null };
 }
 
-export type ReleaseUploadTarget = "release" | "windows" | "mac" | "docs" | "icon" | "thumbnail" | "video";
+export type ReleaseUploadTarget = "release" | "windows" | "mac" | "ios" | "android" | "docs" | "icon" | "thumbnail" | "video";
 
 export async function uploadAppReleaseFile({
   appId,

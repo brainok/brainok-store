@@ -2487,6 +2487,10 @@ textarea {
   width: 100%;
 }
 
+.download-actions .download-mobile-start {
+  grid-column-start: 1;
+}
+
 .download-actions > :only-child {
   grid-column: 1 / -1;
 }
